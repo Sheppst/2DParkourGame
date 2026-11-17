@@ -11,7 +11,7 @@ public class GameManager : MonoBehaviour
     /// <summary>Nom de la scene du menu principal.</summary>
     [SerializeField] string menuScene = "MainMenu";
     /// <summary>Nom de la scene de jeu.</summary>
-    [SerializeField] string gameScene = "Test_Scene";
+    [SerializeField] string gameScene = "Game";
 
     /// <summary>Racine 1 : lecture des entrees joueur.</summary>
     [field: SerializeField] public InputManager Inputs { get; private set; }

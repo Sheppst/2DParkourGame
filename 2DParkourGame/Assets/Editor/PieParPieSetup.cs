@@ -11,11 +11,11 @@ using UnityEngine.SceneManagement;
 using UnityEngine.Tilemaps;
 using UnityEngine.UI;
 
-/// <summary>Outil editeur : monte la Test_Scene (joueur, sol, entites, UI) et cree la scene MainMenu, puis les ajoute aux Build Settings.</summary>
+/// <summary>Outil editeur : cree la scene Game (joueur, sol, entites, UI) et la scene MainMenu, puis les ajoute aux Build Settings. Ne touche pas a Test_Scene.</summary>
 public static class PieParPieSetup
 {
     /// <summary>Chemin de la scene de jeu.</summary>
-    const string GameScene = "Assets/Scenes/Test_Scene.unity";
+    const string GameScene = "Assets/Scenes/Game.unity";
     /// <summary>Chemin de la scene du menu principal.</summary>
     const string MenuScene = "Assets/Scenes/MainMenu.unity";
     /// <summary>Dossier des assets placeholder.</summary>
@@ -26,10 +26,10 @@ public static class PieParPieSetup
     const string TmpPackage = "Packages/com.unity.ugui/Package Resources/TMP Essential Resources.unitypackage";
     /// <summary>Asset d'actions contenant la map UI.</summary>
     const string UiActions = "Assets/InputSystem_Actions.inputactions";
-    /// <summary>Largeur du joueur placeholder.</summary>
-    const float PW = 1f;
-    /// <summary>Hauteur du joueur placeholder.</summary>
-    const float PH = 0.5f;
+    /// <summary>Largeur du joueur placeholder (provisoire, plus haut que large).</summary>
+    const float PW = 0.5f;
+    /// <summary>Hauteur du joueur placeholder (tient dans une case).</summary>
+    const float PH = 1f;
 
     /// <summary>Sprite blanc 1x1 unite.</summary>
     static Sprite white;
@@ -39,12 +39,12 @@ public static class PieParPieSetup
     static DefaultControls.Resources uiRes;
 
     /// <summary>Entree du menu Unity.</summary>
-    [MenuItem("PieParPie/Setup Test Scene + Main Menu")]
+    [MenuItem("PieParPie/Setup Game + Main Menu")]
     public static void Run()
     {
         if (!EnsureTmp()) return;
         if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
-        if (!EditorUtility.DisplayDialog("PieParPie Setup", "Ajouter le setup a Test_Scene et creer MainMenu ?", "Oui", "Annuler")) return;
+        if (!EditorUtility.DisplayDialog("PieParPie Setup", "Creer les scenes Game et MainMenu (si absentes) ?", "Oui", "Annuler")) return;
         Setup();
     }
 
@@ -63,18 +63,12 @@ public static class PieParPieSetup
     /// <summary>Execute tout le setup.</summary>
     static void Setup()
     {
-        EditorSceneManager.OpenScene(GameScene, OpenSceneMode.Single); // avant les assets : ouvrir une scene decharge les assets non references
-        LoadResources();
-        Tile ground = GroundTile();
-        PhysicsMaterial2D slip = Slippery();
-        GameObject trap = EntityPrefab<Trap>("Trap", new Color(0.9f, 0.2f, 0.2f), new Vector2(1f, 0.5f));
-        GameObject coin = EntityPrefab<Coin>("Coin", new Color(1f, 0.85f, 0.1f), new Vector2(0.4f, 0.4f));
-        GameObject finish = EntityPrefab<Finish>("Finish", new Color(0.2f, 0.9f, 0.3f), new Vector2(0.5f, 2f));
-        if (!SetupGameScene(ground, slip, trap, coin, finish)) return;
+        if (File.Exists(GameScene)) Debug.LogWarning("[PieParPieSetup] Game existe deja : ignoree.");
+        else if (!CreateGameScene()) return;
         CreateMenuScene();
         EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(MenuScene, true), new EditorBuildSettingsScene(GameScene, true) };
         AssetDatabase.SaveAssets();
-        Debug.Log("[PieParPieSetup] Termine : Test_Scene configuree, MainMenu creee, Build Settings mis a jour.");
+        Debug.Log("[PieParPieSetup] Termine : Game et MainMenu prets, Build Settings mis a jour.");
     }
 
     // ---------- Assets ----------
@@ -145,13 +139,19 @@ public static class PieParPieSetup
 
     // ---------- Scene de jeu ----------
 
-    /// <summary>Ajoute GameManager, sol, joueur, entites, zone bloquante, UI et SceneLinker a Test_Scene.</summary>
-    static bool SetupGameScene(Tile ground, PhysicsMaterial2D slip, GameObject trap, GameObject coin, GameObject finish)
+    /// <summary>Cree la scene Game : GameManager, lumiere 2D, sol, joueur, entites, zone bloquante, UI et SceneLinker.</summary>
+    static bool CreateGameScene()
     {
-        Scene s = SceneManager.GetActiveScene();
-        if (Object.FindAnyObjectByType<SceneLinker>() != null) { Debug.LogWarning("[PieParPieSetup] Test_Scene deja configuree (SceneLinker present) : ignoree."); return true; }
+        Scene s = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single); // avant les assets : changer de scene decharge les assets non references
+        LoadResources();
+        Tile ground = GroundTile();
+        PhysicsMaterial2D slip = Slippery();
+        GameObject trap = EntityPrefab<Trap>("Trap", new Color(0.9f, 0.2f, 0.2f), new Vector2(1f, 0.5f));
+        GameObject coin = EntityPrefab<Coin>("Coin", new Color(1f, 0.85f, 0.1f), new Vector2(0.4f, 0.4f));
+        GameObject finish = EntityPrefab<Finish>("Finish", new Color(0.2f, 0.9f, 0.3f), new Vector2(0.5f, 2f));
         EnsureGameManager();
         Camera cam = MainCamera();
+        new GameObject("Global Light 2D").AddComponent<UnityEngine.Rendering.Universal.Light2D>().lightType = UnityEngine.Rendering.Universal.Light2D.LightType.Global;
 
         // Sol en tile painting
         var grid = new GameObject("Grid", typeof(Grid));
@@ -162,9 +162,10 @@ public static class PieParPieSetup
         Tilemap tm = tmGo.GetComponent<Tilemap>();
         for (int x = -12; x <= 40; x++) tm.SetTile(new Vector3Int(x, -1), ground);
         for (int y = 0; y < 6; y++) { tm.SetTile(new Vector3Int(-12, y), ground); tm.SetTile(new Vector3Int(40, y), ground); }
-        for (int x = 5; x <= 8; x++) tm.SetTile(new Vector3Int(x, 2), ground);
+        // Saut actuel ~2.4 de haut : plateformes a 2 de haut maximum, murets a 1
+        for (int x = 5; x <= 8; x++) tm.SetTile(new Vector3Int(x, 1), ground);
         for (int x = 18; x <= 21; x++) tm.SetTile(new Vector3Int(x, 1), ground);
-        for (int y = 0; y < 3; y++) tm.SetTile(new Vector3Int(28, y), ground);
+        tm.SetTile(new Vector3Int(30, 0), ground);
         tmGo.GetComponent<TilemapCollider2D>().ProcessTilemapChanges();
         tmGo.GetComponent<CompositeCollider2D>().GenerateGeometry(); // sinon le composite est sauve vide (le joueur traverse le sol)
         // Joueur : racine aux pieds, pivot visuel aux pieds, sprite au-dessus
@@ -181,11 +182,11 @@ public static class PieParPieSetup
 
         // Entites et zone bloquante
         var entities = new GameObject("Entities").transform;
-        Place(coin, entities, 3f, 0.5f); Place(coin, entities, 6.5f, 3.5f); Place(coin, entities, 19.5f, 2.5f); Place(coin, entities, 24f, 0.5f);
-        Place(trap, entities, 11f, 0.25f); Place(trap, entities, 12f, 0.25f); Place(trap, entities, 25.5f, 0.25f);
+        Place(coin, entities, 3f, 0.5f); Place(coin, entities, 6.5f, 2.5f); Place(coin, entities, 19.5f, 2.5f); Place(coin, entities, 24f, 0.5f);
+        Place(trap, entities, 12.5f, 0.25f); Place(trap, entities, 25.5f, 0.25f);
         Place(finish, entities, 35f, 1f);
         var zone = new GameObject("BlockZone").AddComponent<BlockZone>();
-        zone.transform.position = new Vector3(15f, 1f);
+        zone.transform.position = new Vector3(16f, 1f);
         Set(zone, "size", new Vector2(3f, 2f));
 
         // UI : flash, message de fin, pause, parametres
@@ -204,8 +205,7 @@ public static class PieParPieSetup
         SetAuto(link, "PlayerRoot", player.transform); SetAuto(link, "PlayerVisual", visual); SetAuto(link, "MainCamera", cam);
         SetAuto(link, "FlashImage", flashImg); SetAuto(link, "Pause", pause); SetAuto(link, "Settings", settings); SetAuto(link, "FinishText", finishText);
 
-        EditorSceneManager.MarkSceneDirty(s);
-        return EditorSceneManager.SaveScene(s);
+        return EditorSceneManager.SaveScene(s, GameScene);
     }
 
     /// <summary>Instancie un prefab a une position.</summary>
@@ -224,6 +224,7 @@ public static class PieParPieSetup
         Camera c = Camera.main != null ? Camera.main : Object.FindAnyObjectByType<Camera>();
         if (c == null) { c = new GameObject("Main Camera").AddComponent<Camera>(); c.tag = "MainCamera"; }
         c.orthographic = true; c.orthographicSize = 5f; c.transform.position = new Vector3(0f, 1f, -10f);
+        c.clearFlags = CameraClearFlags.SolidColor; c.backgroundColor = new Color(0.12f, 0.12f, 0.18f);
         return c;
     }
 
