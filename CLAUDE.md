@@ -15,6 +15,13 @@
 - Avant un test en Play Mode qui écrit `save.json`, prévenir l'utilisateur : le fichier est partagé avec ses parties (voir Bugs connus).
 - Si la session tourne dans un worktree, `git merge --ff-only main` pour voir le travail de l'utilisateur.
 
+### Erreurs déjà commises, à ne pas refaire
+- J'ai commencé à coder alors que l'utilisateur répondait seulement à mes questions : attendre le mot « feu vert ».
+- J'ai construit le niveau dans Test_Scene au lieu d'une scène de jeu séparée.
+- J'ai inversé les proportions du joueur (plus large que haut) : il est plus haut que large.
+- J'ai fait un niveau infranchissable (plateforme trop haute, piège trop proche) : vérifier l'atteignabilité par le calcul et par un test.
+- Le texte de verrouillage voulu par l'utilisateur est « La partie ne peut être continuer dans l'état du jeu actuelle ». Dans le code, il est sans accents à cause de la règle ASCII ; il est modifiable dans l'Inspector.
+
 ## Conventions de code
 - Chaque classe, struct, méthode et variable a un `/// <summary>` XML.
 - Fichiers de code en ASCII uniquement : aucun accent, même dans les commentaires et les chaînes.
@@ -69,6 +76,8 @@ Ordre dans `GameManager.Update` : Inputs → touche Échap (pause) → Player �
 - **Prudence** : comme dans Minecraft, plus lent et impossible de tomber d'un rebord, grâce à une détection du sol décalée dans le sens du mouvement.
 - **Détection des entités** : overlap box à la taille du collider plus une marge. Pas de `MonoBehaviour` relais pour les collisions.
 - **Mort** : `Debug.Log`, commandes bloquées, puis retour à la dernière sauvegarde après `deathDelay`.
+- **S'écraser** : à l'atterrissage, si la vitesse de chute dépasse `crashSpeed` (variable réglable). Purement visuel : ni mort ni dégâts.
+- **BlockZones** : c'est l'utilisateur qui les place. Elles déterminent ce qu'est une « situation bloquante » pour la sauvegarde.
 - **Pièces** : désactivées, jamais détruites. Seules les pièces présentes dans la dernière sauvegarde comptent ; une mort fait réapparaître celles qui ne sont pas sauvegardées. L'identifiant d'une pièce vient de sa position de départ.
 - **Sauvegarde** :
   - une seule écriture, à la première frame où le joueur est au sol, immobile, a bougé à la frame précédente, n'est pas dans une BlockZone et n'est ni mort ni arrivé ;
