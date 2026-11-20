@@ -87,6 +87,7 @@ public class PlayerController
         b.gravityScale = 0f; b.freezeRotation = true;
         gravityForce.force = new Vector2(0f, -gravity * b.mass);
         filter = new ContactFilter2D { useTriggers = false, useLayerMask = true, layerMask = groundMask };
+
         ResetState();
     }
 
@@ -104,20 +105,33 @@ public class PlayerController
         Vector2 v = b.linearVelocity;
         bool wasGrounded = IsGrounded;
         IsGrounded = Probe(Vector2.zero);
-        if (IsGrounded && !wasGrounded) { JustLanded = true; LandingSpeed = Mathf.Max(0f, -lastAirVy); }
-        if (IsGrounded) { lastGroundX = b.position.x; jumpedSinceGround = false; } else lastAirVy = v.y;
+
+        if (IsGrounded && !wasGrounded)
+        { JustLanded = true; LandingSpeed = Mathf.Max(0f, -lastAirVy); }
+
+        if (IsGrounded)
+        { lastGroundX = b.position.x; jumpedSinceGround = false; }
+        else lastAirVy = v.y;
 
         float input = Locked ? 0f : Mathf.Clamp(i.MoveX, -1f, 1f);
         IsSneaking = !Locked && i.SneakHeld;
         IsRunning = !Locked && !IsSneaking && i.RunHeld && input != 0f;
         v.x = input * (IsSneaking ? sneakSpeed : IsRunning ? runSpeed : walkSpeed);
+
         if (IsSneaking && IsGrounded && v.x != 0f && !Probe(new Vector2(v.x * Time.fixedDeltaTime, 0f))) v.x = 0f;
+
         IsMoving = v.x != 0f;
         int dir = input > 0f ? 1 : input < 0f ? -1 : Facing;
-        if (dir != Facing) { Facing = dir; JustTurned = true; }
 
-        if (!Locked && bufferTimer > 0f && CanJump(b.position.x, v.y)) { v.y = jumpVelocity; Jumped(); }
-        if (jumpMode == JumpMode.Variable && jumpedSinceGround && !cutDone && v.y > 0f && !i.JumpHeld) { v.y *= jumpCut; cutDone = true; }
+        if (dir != Facing)
+        { Facing = dir; JustTurned = true; }
+
+        if (!Locked && bufferTimer > 0f && CanJump(b.position.x, v.y))
+        { v.y = jumpVelocity; Jumped(); }
+
+        if (jumpMode == JumpMode.Variable && jumpedSinceGround && !cutDone && v.y > 0f && !i.JumpHeld)
+        { v.y *= jumpCut; cutDone = true; }
+
         b.linearVelocity = Velocity = v;
     }
 
@@ -133,8 +147,11 @@ public class PlayerController
         Bounds c = GM.Player.Collider.bounds;
         Vector2 center = new Vector2(c.center.x, c.min.y - groundProbe * 0.5f) + offset;
         Vector2 size = new(Mathf.Max(0.01f, c.size.x - 0.02f), groundProbe);
+
         int n = Physics2D.OverlapBox(center, size, 0f, filter, hits);
+
         for (int k = 0; k < n; k++) if (hits[k] != GM.Player.Collider) return true;
+
         return false;
     }
 
@@ -147,6 +164,7 @@ public class PlayerController
         bufferTimer = lastAirVy = LandingSpeed = 0f; jumpedSinceGround = cutDone = Locked = false;
         IsGrounded = IsMoving = IsRunning = IsSneaking = false; Velocity = Vector2.zero; Facing = 1;
         lastGroundX = GM != null && GM.Player.IsBound ? GM.Player.Position.x : 0f;
+
         ClearEvents();
     }
 
@@ -155,6 +173,7 @@ public class PlayerController
     {
         Gizmos.color = Color.cyan;
         Vector3 l = new(c.min.x - coyoteDistance, c.min.y), r = new(c.max.x + coyoteDistance, c.min.y);
+
         Gizmos.DrawLine(l, r);
         Gizmos.DrawLine(l + Vector3.up * 0.1f, l - Vector3.up * 0.1f);
         Gizmos.DrawLine(r + Vector3.up * 0.1f, r - Vector3.up * 0.1f);

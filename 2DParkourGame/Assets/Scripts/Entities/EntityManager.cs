@@ -37,10 +37,13 @@ public class EntityManager
     internal void Bind()
     {
         Clear();
+
         foreach (Entity e in GM.Linker.FindEntities())
         {
             e.Init();
+
             if (!byId.TryAdd(e.Id, e)) Debug.LogWarning($"[EntityManager] Deux entites au meme endroit ({e.Id}) : '{e.name}' ignoree par la sauvegarde.", e);
+
             entities.Add(e);
         }
     }
@@ -49,13 +52,17 @@ public class EntityManager
     internal void Tick()
     {
         if ((timer -= Time.deltaTime) > 0f) return;
+
         timer = checkInterval;
         Vector2 p = GM.Player.Position;
         float max = activationDistance * activationDistance;
+
         foreach (Entity e in entities)
         {
             if (e == null || e.Consumed) continue;
+
             bool near = ((Vector2)e.transform.position - p).sqrMagnitude <= max;
+
             if (e.gameObject.activeSelf != near) e.gameObject.SetActive(near);
         }
     }
@@ -70,6 +77,7 @@ public class EntityManager
     public void Collect(Coin coin)
     {
         if (coin == null || coin.Consumed) return;
+
         coin.SetConsumed(true); pendingCoins.Add(coin); Coins++;
     }
 
@@ -80,6 +88,7 @@ public class EntityManager
     public void RevertCoins()
     {
         foreach (Entity c in pendingCoins) if (c != null) c.SetConsumed(false);
+
         pendingCoins.Clear(); Coins = savedCoins.Count;
     }
 
@@ -87,7 +96,10 @@ public class EntityManager
     public void LoadCoins(IEnumerable<string> ids)
     {
         RevertCoins(); savedCoins.Clear();
-        if (ids != null) foreach (string id in ids) if (byId.TryGetValue(id, out Entity e) && e is Coin) { savedCoins.Add(id); e.SetConsumed(true); }
+
+        if (ids != null) foreach (string id in ids) if (byId.TryGetValue(id, out Entity e) && e is Coin)
+        { savedCoins.Add(id); e.SetConsumed(true); }
+
         Coins = savedCoins.Count; timer = 0f;
     }
 

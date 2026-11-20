@@ -47,10 +47,18 @@ public class SettingsMenu : MonoBehaviour
     void Awake()
     {
         AudioListener.volume = PlayerPrefs.GetFloat(VolumeKey, 1f);
-        if (panel == null) { Debug.LogError("[SettingsMenu] Panel manquant.", this); enabled = false; return; }
-        if (volume != null) { volume.SetValueWithoutNotify(AudioListener.volume); volume.onValueChanged.AddListener(SetVolume); }
+
+        if (panel == null)
+        { Debug.LogError("[SettingsMenu] Panel manquant.", this); enabled = false; return; }
+
+        if (volume != null)
+        { volume.SetValueWithoutNotify(AudioListener.volume); volume.onValueChanged.AddListener(SetVolume); }
+
         if (back != null) back.onClick.AddListener(Close);
-        foreach (RebindEntry r in rebinds) if (r.Button != null) { RebindEntry e = r; r.Button.onClick.AddListener(() => Rebind(e)); }
+
+        foreach (RebindEntry r in rebinds) if (r.Button != null)
+        { RebindEntry e = r; r.Button.onClick.AddListener(() => Rebind(e)); }
+
         SetupResolutions();
         panel.SetActive(false);
     }
@@ -68,8 +76,12 @@ public class SettingsMenu : MonoBehaviour
     void Rebind(RebindEntry e)
     {
         InputAction a = GM != null ? GM.Inputs.Map?.FindAction(e.Action) : null;
-        if (a == null) { Debug.LogError($"[SettingsMenu] Action '{e.Action}' introuvable.", this); return; }
+
+        if (a == null)
+        { Debug.LogError($"[SettingsMenu] Action '{e.Action}' introuvable.", this); return; }
+
         if (e.Label != null) e.Label.text = "...";
+
         GM.Inputs.StartRebind(a, e.BindingIndex, RefreshLabels);
     }
 
@@ -77,6 +89,7 @@ public class SettingsMenu : MonoBehaviour
     void RefreshLabels()
     {
         if (GM == null || GM.Inputs.Map == null) return;
+
         foreach (RebindEntry r in rebinds) if (r.Label != null) r.Label.text = InputManager.KeyName(GM.Inputs.Map.FindAction(r.Action), r.BindingIndex);
     }
 
@@ -84,15 +97,19 @@ public class SettingsMenu : MonoBehaviour
     void SetupResolutions()
     {
         if (resolution == null) return;
+
         resolutions = Screen.resolutions;
         var options = new List<string>();
         int current = 0;
+
         for (int i = 0; i < resolutions.Length; i++)
         {
             Resolution r = resolutions[i];
             options.Add($"{r.width} x {r.height} @ {Mathf.RoundToInt((float)r.refreshRateRatio.value)} Hz");
+
             if (r.width == Screen.width && r.height == Screen.height) current = i;
         }
+
         resolution.ClearOptions(); resolution.AddOptions(options);
         resolution.SetValueWithoutNotify(current);
         resolution.onValueChanged.AddListener(SetResolution);
@@ -102,6 +119,7 @@ public class SettingsMenu : MonoBehaviour
     void SetResolution(int i)
     {
         if (i < 0 || i >= resolutions.Length) return;
+
         Resolution r = resolutions[i];
         Screen.SetResolution(r.width, r.height, Screen.fullScreenMode, r.refreshRateRatio);
     }

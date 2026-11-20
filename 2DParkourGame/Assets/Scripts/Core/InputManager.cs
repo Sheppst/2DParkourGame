@@ -55,6 +55,7 @@ public class InputManager
         Run = Map.AddAction("Run", InputActionType.Button, "<Keyboard>/leftShift");
         Sneak = Map.AddAction("Sneak", InputActionType.Button, "<Keyboard>/#(f)");
         Exit = Map.AddAction("Exit", InputActionType.Button, "<Keyboard>/escape");
+
         LoadRebinds();
     }
 
@@ -65,6 +66,7 @@ public class InputManager
     internal void Tick()
     {
         if (Map == null) return;
+
         bool on = !IsRebinding;
         MoveX = on ? Move.ReadValue<float>() : 0f;
         JumpPressed = on && Jump.WasPressedThisFrame(); JumpHeld = on && Jump.IsPressed();
@@ -86,9 +88,12 @@ public class InputManager
     /// <summary>Lance la reassignation interactive d'une touche puis sauvegarde ; onDone est appele a la fin.</summary>
     public void StartRebind(InputAction action, int bindingIndex, Action onDone)
     {
-        if (action == null || bindingIndex < 0 || bindingIndex >= action.bindings.Count) { Debug.LogError("[InputManager] Reassignation invalide."); return; }
+        if (action == null || bindingIndex < 0 || bindingIndex >= action.bindings.Count)
+        { Debug.LogError("[InputManager] Reassignation invalide."); return; }
+
         CancelRebind();
         action.Disable();
+
         rebind = action.PerformInteractiveRebinding(bindingIndex).WithControlsExcluding("<Mouse>").WithCancelingThrough("<Keyboard>/escape")
             .OnComplete(_ => EndRebind(action, onDone)).OnCancel(_ => EndRebind(action, onDone)).Start();
     }
@@ -98,6 +103,7 @@ public class InputManager
     {
         rebind?.Dispose(); rebind = null;
         action.Enable(); SaveRebinds();
+
         onDone?.Invoke();
     }
 
@@ -115,8 +121,12 @@ public class InputManager
     void LoadRebinds()
     {
         string json = PlayerPrefs.GetString(RebindKey, "");
+
         if (string.IsNullOrEmpty(json)) return;
-        try { Map.LoadBindingOverridesFromJson(json); }
-        catch (Exception e) { Debug.LogWarning($"[InputManager] Reassignations corrompues ignorees : {e.Message}"); PlayerPrefs.DeleteKey(RebindKey); }
+
+        try
+        { Map.LoadBindingOverridesFromJson(json); }
+        catch (Exception e)
+        { Debug.LogWarning($"[InputManager] Reassignations corrompues ignorees : {e.Message}"); PlayerPrefs.DeleteKey(RebindKey); }
     }
 }

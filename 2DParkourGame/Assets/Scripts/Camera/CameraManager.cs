@@ -27,6 +27,7 @@ public class CameraManager
     internal void LateTick()
     {
         if (Camera == null) return;
+
         Vector2 p = Follow.LateTick() + Effects.ShakeOffset;
         Camera.transform.position = new Vector3(p.x, p.y, Camera.transform.position.z);
     }

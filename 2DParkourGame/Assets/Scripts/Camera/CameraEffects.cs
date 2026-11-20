@@ -77,17 +77,25 @@ public class CameraEffects
     public void Play(FreezeSettings f)
     {
         if (f.Duration <= 0f) return;
+
         freezeTimer = Mathf.Max(freezeTimer, f.Duration); GM.RefreshTimeScale();
     }
 
     /// <summary>Fait trembler la camera.</summary>
-    public void Play(ShakeSettings s) { if (s.Duration > 0f) { shake = s; shakeTimer = s.Duration; } }
+    public void Play(ShakeSettings s)
+    {
+        if (s.Duration > 0f)
+        { shake = s; shakeTimer = s.Duration; }
+    }
 
     /// <summary>Lance un flash plein ecran (necessite FlashImage dans le SceneLinker).</summary>
     public void Play(FlashSettings f)
     {
         if (f.Duration <= 0f) return;
-        if (GM.Linker == null || GM.Linker.FlashImage == null) { Debug.LogWarning("[CameraEffects] Flash sans FlashImage dans le SceneLinker."); return; }
+
+        if (GM.Linker == null || GM.Linker.FlashImage == null)
+        { Debug.LogWarning("[CameraEffects] Flash sans FlashImage dans le SceneLinker."); return; }
+
         flash = f; flashTimer = f.Duration;
     }
 
@@ -95,15 +103,21 @@ public class CameraEffects
     internal void Tick()
     {
         float dt = Time.unscaledDeltaTime;
-        if (freezeTimer > 0f && (freezeTimer -= dt) <= 0f) { freezeTimer = 0f; GM.RefreshTimeScale(); }
+
+        if (freezeTimer > 0f && (freezeTimer -= dt) <= 0f)
+        { freezeTimer = 0f; GM.RefreshTimeScale(); }
+
         ShakeOffset = Vector2.zero;
+
         if (shakeTimer > 0f && !GM.IsPaused)
         {
             shakeTimer -= dt;
             float t = Time.unscaledTime * shake.Frequency, k = shake.Amplitude * Mathf.Clamp01(shakeTimer / shake.Duration);
             ShakeOffset = new Vector2(Mathf.PerlinNoise(t, 0f) - 0.5f, Mathf.PerlinNoise(0f, t) - 0.5f) * (2f * k);
         }
-        if (flashTimer > 0f) { flashTimer = Mathf.Max(0f, flashTimer - dt); SetFlash(flash.Color.a * flashTimer / flash.Duration); }
+
+        if (flashTimer > 0f)
+        { flashTimer = Mathf.Max(0f, flashTimer - dt); SetFlash(flash.Color.a * flashTimer / flash.Duration); }
     }
 
     /// <summary>Arrete tous les effets et retablit le temps.</summary>
@@ -114,6 +128,7 @@ public class CameraEffects
     {
         freezeTimer = shakeTimer = flashTimer = 0f; ShakeOffset = Vector2.zero;
         SetFlash(0f);
+
         if (GM != null) GM.RefreshTimeScale();
     }
 
@@ -121,7 +136,9 @@ public class CameraEffects
     void SetFlash(float alpha)
     {
         var img = GM != null && GM.Linker != null ? GM.Linker.FlashImage : null;
+
         if (img == null) return;
+
         Color c = flash.Color; c.a = alpha; img.color = c;
         img.enabled = alpha > 0f;
     }

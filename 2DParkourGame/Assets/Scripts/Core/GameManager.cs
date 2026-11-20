@@ -34,9 +34,12 @@ public class GameManager : MonoBehaviour
     /// <summary>Securise le singleton, instancie les racines 1 et relaie Awake.</summary>
     void Awake()
     {
-        if (GM != null && GM != this) { Destroy(gameObject); return; }
+        if (GM != null && GM != this)
+        { Destroy(gameObject); return; }
+
         GM = this;
         DontDestroyOnLoad(gameObject);
+
         Inputs ??= new(); Player ??= new(); Entities ??= new(); Level ??= new(); Cam ??= new();
         Inputs.Awake(); Player.Awake(); Entities.Awake(); Level.Awake(); Cam.Awake();
         SceneManager.sceneLoaded += OnSceneLoaded;
@@ -52,6 +55,7 @@ public class GameManager : MonoBehaviour
     void FixedUpdate()
     {
         if (GM != this || !InGame) return;
+
         Player.FixedTick();
         Level.FixedTick();
     }
@@ -60,9 +64,13 @@ public class GameManager : MonoBehaviour
     void Update()
     {
         if (GM != this) return;
+
         Inputs.Tick();
+
         if (!InGame) return;
+
         if (Inputs.ExitPressed) HandleExit();
+
         Player.Tick(); Entities.Tick(); Level.Tick(); Cam.Tick();
     }
 
@@ -76,8 +84,10 @@ public class GameManager : MonoBehaviour
     void OnDestroy()
     {
         if (GM != this) return;
+
         SceneManager.sceneLoaded -= OnSceneLoaded;
         UnbindScene(); Inputs?.OnDestroy();
+
         Time.timeScale = 1f; GM = null;
     }
 
@@ -92,9 +102,14 @@ public class GameManager : MonoBehaviour
     {
         UnbindScene();
         SetPaused(false);
+
         Linker = FindAnyObjectByType<SceneLinker>();
+
         if (Linker == null) return;
-        if (!Linker.IsValid(out string err)) { Debug.LogError($"[GameManager] SceneLinker invalide : {err}", Linker); Linker = null; return; }
+
+        if (!Linker.IsValid(out string err))
+        { Debug.LogError($"[GameManager] SceneLinker invalide : {err}", Linker); Linker = null; return; }
+
         Player.Bind(); Entities.Bind(); Level.Bind(); Cam.Bind();
     }
 
@@ -102,6 +117,7 @@ public class GameManager : MonoBehaviour
     void UnbindScene()
     {
         if (Linker == null) return;
+
         Cam?.Unbind(); Level?.Unbind(); Entities?.Unbind(); Player?.Unbind();
         Linker = null;
     }
@@ -110,7 +126,10 @@ public class GameManager : MonoBehaviour
     void HandleExit()
     {
         if (Level.IsFinished) return;
-        if (Linker.Settings != null && Linker.Settings.IsOpen) { Linker.Settings.Close(); return; }
+
+        if (Linker.Settings != null && Linker.Settings.IsOpen)
+        { Linker.Settings.Close(); return; }
+
         SetPaused(!IsPaused);
     }
 
@@ -118,7 +137,9 @@ public class GameManager : MonoBehaviour
     public void SetPaused(bool paused)
     {
         IsPaused = paused;
+
         if (Linker != null && Linker.Pause != null) Linker.Pause.Show(paused);
+
         RefreshTimeScale();
     }
 
@@ -134,7 +155,9 @@ public class GameManager : MonoBehaviour
     /// <summary>Charge une scene apres avoir verifie qu'elle est dans les Build Settings.</summary>
     void LoadScene(string scene)
     {
-        if (!Application.CanStreamedLevelBeLoaded(scene)) { Debug.LogError($"[GameManager] Scene '{scene}' absente des Build Settings."); return; }
+        if (!Application.CanStreamedLevelBeLoaded(scene))
+        { Debug.LogError($"[GameManager] Scene '{scene}' absente des Build Settings."); return; }
+
         Time.timeScale = 1f;
         SceneManager.LoadScene(scene);
     }

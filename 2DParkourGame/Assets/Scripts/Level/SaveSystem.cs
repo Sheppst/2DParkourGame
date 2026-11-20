@@ -28,9 +28,14 @@ public static class SaveSystem
     public static bool TryLoad(out SaveData data)
     {
         data = null;
+
         if (!Exists) return false;
-        try { data = JsonUtility.FromJson<SaveData>(File.ReadAllText(FilePath)); }
-        catch (Exception e) { Debug.LogWarning($"[SaveSystem] Lecture impossible : {e.Message}"); }
+
+        try
+        { data = JsonUtility.FromJson<SaveData>(File.ReadAllText(FilePath)); }
+        catch (Exception e)
+        { Debug.LogWarning($"[SaveSystem] Lecture impossible : {e.Message}"); }
+
         return data != null;
     }
 
@@ -38,21 +43,29 @@ public static class SaveSystem
     public static bool Write(SaveData data)
     {
         if (data == null) return false;
+
         string tmp = FilePath + ".tmp";
+
         try
         {
             File.WriteAllText(tmp, JsonUtility.ToJson(data, true));
+
             if (Exists) File.Delete(FilePath);
+
             File.Move(tmp, FilePath);
+
             return true;
         }
-        catch (Exception e) { Debug.LogError($"[SaveSystem] Ecriture impossible : {e.Message}"); return false; }
+        catch (Exception e)
+        { Debug.LogError($"[SaveSystem] Ecriture impossible : {e.Message}"); return false; }
     }
 
     /// <summary>Supprime la sauvegarde (nouvelle partie).</summary>
     public static void Delete()
     {
-        try { if (Exists) File.Delete(FilePath); }
-        catch (Exception e) { Debug.LogError($"[SaveSystem] Suppression impossible : {e.Message}"); }
+        try
+        { if (Exists) File.Delete(FilePath); }
+        catch (Exception e)
+        { Debug.LogError($"[SaveSystem] Suppression impossible : {e.Message}"); }
     }
 }

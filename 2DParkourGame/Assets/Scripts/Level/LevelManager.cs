@@ -39,11 +39,14 @@ public class LevelManager
         blockers.Clear(); IsFinished = false; movedBefore = false; finishTimer = 0f;
         lastPos = GM.Player.Position;
         last = new SaveData { Position = lastPos };
+
         ShowFinish(false);
+
         if (ContinueRequested && SaveSystem.TryLoad(out SaveData s) && !s.Finished)
         {
             last = s; GM.Entities.LoadCoins(s.Coins); GM.Player.ResetTo(s.Position); lastPos = s.Position;
         }
+
         ContinueRequested = false;
     }
 
@@ -53,17 +56,20 @@ public class LevelManager
         Vector2 pos = GM.Player.Position;
         bool moved = (pos - lastPos).sqrMagnitude > 1e-6f;
         lastPos = pos;
+
         if (CanSave(moved)) Save();
+
         movedBefore = moved;
     }
 
     /// <summary>Au sol, immobile, a bouge juste avant, pas bloque, ni mort ni fini.</summary>
-    bool CanSave(bool moved) => !moved && movedBefore && GM.Player.Controller.IsGrounded && !IsBlocked && !GM.Player.Mechanism.IsDead && !IsFinished;
+    bool CanSave(bool moved) => !moved && movedBefore && GM.Player.Controller.IsGrounded && !IsBlocked && !GM.Player.Death.IsDead && !IsFinished;
 
     /// <summary>Frame : compte a rebours de fin de niveau (temps reel, insensible a la pause).</summary>
     internal void Tick()
     {
-        if (IsFinished && (finishTimer -= Time.unscaledDeltaTime) <= 0f) { IsFinished = false; GM.LoadMenu(); }
+        if (IsFinished && (finishTimer -= Time.unscaledDeltaTime) <= 0f)
+        { IsFinished = false; GM.LoadMenu(); }
     }
 
     /// <summary>Delie le niveau.</summary>
@@ -73,6 +79,7 @@ public class LevelManager
     public void Save()
     {
         GM.Entities.CommitCoins();
+
         last = new SaveData { Position = GM.Player.Position, Coins = new List<string>(GM.Entities.SavedCoinIds) };
         SaveSystem.Write(last);
     }
@@ -82,6 +89,7 @@ public class LevelManager
     {
         GM.Entities.RevertCoins();
         GM.Player.ResetTo(last.Position);
+
         lastPos = last.Position; movedBefore = false;
     }
 
@@ -89,9 +97,12 @@ public class LevelManager
     public void Finish()
     {
         if (IsFinished) return;
+
         IsFinished = true; finishTimer = finishDelay;
         GM.Player.Controller.Locked = true;
+
         last.Finished = true; SaveSystem.Write(last);
+
         ShowFinish(true);
     }
 
@@ -102,7 +113,10 @@ public class LevelManager
     void ShowFinish(bool on)
     {
         var t = GM.Linker != null ? GM.Linker.FinishText : null;
-        if (t == null) { if (on) Debug.Log($"[Level] {finishMessage}"); return; }
+
+        if (t == null)
+        { if (on) Debug.Log($"[Level] {finishMessage}"); return; }
+
         t.text = finishMessage; t.gameObject.SetActive(on);
     }
 }

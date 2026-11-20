@@ -33,12 +33,16 @@ public class SceneLinker : MonoBehaviour
     {
         error = PlayerRoot == null ? "PlayerRoot manquant" : PlayerVisual == null ? "PlayerVisual manquant"
               : MainCamera == null ? "MainCamera manquante" : null;
+
         if (error != null) return false;
+
         PlayerBody = PlayerRoot.GetComponent<Rigidbody2D>();
         PlayerCollider = PlayerRoot.GetComponent<BoxCollider2D>();
         PlayerGravity = PlayerRoot.GetComponent<ConstantForce2D>();
+
         error = PlayerBody == null ? "Rigidbody2D manquant sur le joueur" : PlayerCollider == null ? "BoxCollider2D manquant sur le joueur"
               : PlayerGravity == null ? "ConstantForce2D manquant sur le joueur" : null;
+
         return error == null;
     }
 
@@ -49,7 +53,9 @@ public class SceneLinker : MonoBehaviour
     void OnDrawGizmos()
     {
         GameManager gm = GameManager.GM != null ? GameManager.GM : FindAnyObjectByType<GameManager>();
+
         if (gm == null || gm.Player == null || gm.Player.Controller == null || PlayerRoot == null) return;
+
         if (PlayerRoot.TryGetComponent(out BoxCollider2D c)) gm.Player.Controller.DrawGizmos(c.bounds);
     }
 }

@@ -12,6 +12,8 @@ public class PlayerManager
     [field: SerializeField] public PlayerAnimator Animator { get; private set; }
     /// <summary>Racine 2 : reactions avec l'environnement.</summary>
     [field: SerializeField] public PlayerMechanism Mechanism { get; private set; }
+    /// <summary>Racine 2 : point d'entree unique de la mort.</summary>
+    [field: SerializeField] public PlayerDeath Death { get; private set; }
 
     /// <summary>Transform racine du joueur.</summary>
     public Transform Root { get; private set; }
@@ -31,8 +33,9 @@ public class PlayerManager
     /// <summary>Instancie et initialise les racines 2.</summary>
     internal void Awake()
     {
-        Controller ??= new(); Animator ??= new(); Mechanism ??= new();
-        Controller.Awake(); Animator.Awake(); Mechanism.Awake();
+        Controller ??= new(); Animator ??= new(); Mechanism ??= new(); Death ??= new();
+
+        Controller.Awake(); Animator.Awake(); Mechanism.Awake(); Death.Awake();
     }
 
     /// <summary>Recupere les objets du joueur depuis le SceneLinker et lie les racines 2.</summary>
@@ -40,22 +43,26 @@ public class PlayerManager
     {
         SceneLinker l = GM.Linker;
         Root = l.PlayerRoot; Body = l.PlayerBody; Collider = l.PlayerCollider; Visual = l.PlayerVisual;
-        Controller.Bind(l.PlayerGravity); Animator.Bind(); Mechanism.Bind();
+
+        Controller.Bind(l.PlayerGravity); Animator.Bind(); Mechanism.Bind(); Death.Bind();
     }
 
     /// <summary>Physique : deplacement puis detection de l'environnement.</summary>
     internal void FixedTick()
     {
         if (!IsBound) return;
+
         Controller.FixedTick(); Mechanism.FixedTick();
     }
 
-    /// <summary>Frame : entrees, mecanismes, animation, puis purge des evenements consommes.</summary>
+    /// <summary>Frame : entrees, mecanismes, mort, animation, puis purge des evenements consommes.</summary>
     internal void Tick()
     {
         if (!IsBound) return;
-        Controller.Tick(); Mechanism.Tick(); Animator.Tick();
-        Controller.ClearEvents(); Mechanism.ClearEvents();
+
+        Controller.Tick(); Mechanism.Tick(); Death.Tick(); Animator.Tick();
+
+        Controller.ClearEvents(); Mechanism.ClearEvents(); Death.ClearEvents();
     }
 
     /// <summary>Delie le joueur de la scene.</summary>
@@ -65,8 +72,10 @@ public class PlayerManager
     public void ResetTo(Vector2 position)
     {
         if (!IsBound) return;
+
         Body.position = position; Root.position = position; Body.linearVelocity = Vector2.zero;
         Physics2D.SyncTransforms();
-        Controller.ResetState(); Mechanism.ResetState(); Animator.ResetState();
+
+        Controller.ResetState(); Mechanism.ResetState(); Death.ResetState(); Animator.ResetState();
     }
 }

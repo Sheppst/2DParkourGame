@@ -16,12 +16,18 @@ public abstract class Entity : MonoBehaviour
     /// <summary>Prepare l'entite (appele par l'EntityManager, meme si l'objet est desactive).</summary>
     public void Init()
     {
+        Prepare();
+
         Vector3 p = transform.position;
         Id = $"{GetType().Name}_{Mathf.RoundToInt(p.x * 100f)}_{Mathf.RoundToInt(p.y * 100f)}";
         renderers = GetComponentsInChildren<Renderer>(true);
         colliders = GetComponentsInChildren<Collider2D>(true);
+
         if (colliders.Length == 0) Debug.LogWarning($"[Entity] {name} n'a pas de Collider2D : le joueur ne pourra pas la toucher.", this);
     }
+
+    /// <summary>Point d'extension appele au debut d'Init, avant la collecte des renderers et colliders.</summary>
+    protected virtual void Prepare() { }
 
     /// <summary>Appele par le joueur quand son overlap box touche l'entite.</summary>
     public abstract void OnPlayerTouch();

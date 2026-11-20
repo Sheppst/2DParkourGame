@@ -5,6 +5,22 @@
 - Spec de référence : page Notion « PièParPiè » (https://app.notion.com/p/409857f6262d80338ea0cddd6f1a37ec). La relire avant de coder une nouvelle partie.
 - Objectifs : contrôles du joueur (3C), caméra qui coulisse, pièges et pièces, sauvegarde automatique, menus principal et pause, paramètres.
 
+### Boucle OCR (Objectif, Challenge, Récompense), pas encore rédigée dans Notion
+- Terme de game design : un objectif donne une raison de jouer, un challenge donne de l'importance, une récompense prouve que l'effort n'était pas vain, puis un nouvel objectif relance la boucle.
+- **Récompense = deckbuilding de fin de niveau** : à chaque fin de niveau, le joueur obtient l'occasion de choisir des attributs.
+- Chaque attribut a un **type**, et chaque type a une **couleur**.
+- **Écharpe du joueur** (rangée sous « Character » dans Notion, pas sous Récompense) : sa couleur compare les couleurs de tous les attributs. La couleur la plus présente domine, sinon les couleurs se mélangent en proportion. Le sprite de l'écharpe est blanc et teinté en code ; il est accroché à un objet vide du skin, qui suivra les animations.
+- Titres vides déjà créés dans Notion : « Boucle OCR » (Objectif, Challenge, Récompense > Deckbuilding > Attributs, Types et couleurs) et « Écharpe » sous Character.
+
+### Direction artistique (notes manuscrites de l'utilisateur)
+- Pixel art de style « 32 bits », 32 × 32 pixels par bloc, 1 bloc = 1 unité Unity. Assets générés par code (menu PieParPie > Generate Art).
+- Personnage : cheveux blonds courts, t-shirt rouge, cargo gris, écharpe colorée. Il tient en grande partie dans un bloc, avec des espaces vides pour un aspect humain ; jusqu'à 4 pixels de débordement autorisés sur chacun des 8 côtés.
+- Sol terre et herbe, chaque tuile remplit un bloc : dessus avec une bande d'herbe de 2 px (6,25 %) qui dépasse au-dessus (et sur le côté extérieur pour les bords), milieu en terre pleine, dessous irrégulier avec de petites roches qui pendent. Toutes les variantes de voisinage, plus un Rule Tile.
+- Pièce : pièce dorée classique (inspirée du style Mario, sans copier le sprite).
+- Piques : triangles grisés avec un reflet pour un aspect arrondi, 2 par bloc. Bande `SpikeStrip` : nombre de piques en stock, collider découpé selon les piques réellement posées (raycast sous chaque pique ; sans support, la pique est masquée et sa zone exclue). Orientable sol, plafond, murs. Segment droit uniquement. Base enfoncée de 4 px dans la surface et affichée derrière la terre (sortingOrder -1). Outil éditeur `TrapSnapper` : 3 s après qu'un piège (SpikeStrip ou Trap) a été lâché, rotation au quart de tour, alignement sur la grille des demi-blocs et collage à la surface proche (même raycast).
+- Finish : mini portail rose-violet dans une arche en bois aux bords droits, 1 bloc de large sur 4 de haut.
+- Animations (pièce, portail, personnage) : plus tard.
+
 ## Façon de travailler (préférences de l'utilisateur, obligatoires)
 - Langue : français.
 - **Attendre un « feu vert » explicite avant de coder.** Une réponse à mes questions ne vaut pas feu vert.
@@ -27,6 +43,7 @@
 - Fichiers de code en ASCII uniquement : aucun accent, même dans les commentaires et les chaînes.
 - Gérer toutes les erreurs possibles (vérifications de null, données corrompues, références manquantes), avec un message `[NomClasse]` dans les logs.
 - Découper au maximum, puis compacter : peu de lignes, mais pas de lignes trop longues (environ 160 caractères maximum).
+- **Aérer les méthodes** : une ligne vide entre chaque étape logique d'une méthode (garde, préparation, boucle, application, log). Le corps court d'une boucle va sur la ligne suivante, entre accolades sur une seule ligne. Exemple de l'utilisateur : `SpikeStrip.Prepare()`.
 - **Aucune coroutine** (sauf pour d'éventuelles requêtes serveur) : minuteries faites à la main avec des `float`.
 - Noms réels (`GameManager`, `PlayerManager`…). Les `Racine0/10/11/21` de `Assets/Scenes/--TEST--` ne sont que des exemples du modèle.
 
@@ -39,14 +56,14 @@ Le modèle vient des exemples de l'utilisateur dans `Assets/Scenes/--TEST--`.
 | Racine 1 (sur le GameManager) | Racines 2 | Rôle |
 |---|---|---|
 | `InputManager` (`GM.Inputs`) | — | Actions de l'Input System créées en code et rangées dans des variables (MoveX, JumpPressed/Held, RunHeld, SneakHeld, InteractPressed, ExitPressed). Réassignation sauvegardée dans PlayerPrefs. |
-| `PlayerManager` (`GM.Player`) | `PlayerController`, `PlayerAnimator`, `PlayerMechanism` | Déplacement ; animations par scale/rotation ; mort, écrasement, interaction, détection par overlap box. |
+| `PlayerManager` (`GM.Player`) | `PlayerController`, `PlayerAnimator`, `PlayerMechanism`, `PlayerDeath` | Déplacement ; animations par scale/rotation ; écrasement, interaction, détection par overlap box ; `PlayerDeath` est le point d'entrée unique de la mort (`Kill(source)`), qui refuse les doublons (déjà mort, réapparition, pause, gel, niveau fini). |
 | `EntityManager` (`GM.Entities`) | — | Liste des entités, activation/désactivation sur demande ou selon la distance au joueur (objet entier), compteur `Coins`. |
 | `LevelManager` (`GM.Level`) | — | Sauvegarde JSON, retour à la dernière sauvegarde, fin de niveau. Fichier `SaveSystem.cs` : `SaveData` et lecture/écriture sécurisées. |
 | `CameraManager` (`GM.Cam`) | `CameraFollow`, `CameraEffects` | Coulissement de la caméra ; effets gel du temps / tremblement / flash (`FreezeSettings`, `ShakeSettings`, `FlashSettings` et `CameraEffect` qui les combine). Ajouté comme racine 1 de ma propre initiative, non prévu par la spec. |
 
 Racines indépendantes :
 - `SceneLinker` : fournit au GameManager persistant les objets de la scène (joueur, visuel, caméra, image de flash, menus, texte de fin) et dessine le gizmo du coyote time.
-- `Entity` (abstraite), avec `Trap` (tue), `Coin` (ramassée) et `Finish` (fin de niveau). Le collider doit être en trigger et sur le même objet.
+- `Entity` (abstraite), avec `Trap` (tue), `Coin` (ramassée), `Finish` (fin de niveau) et `SpikeStrip` (bande de piques). Le collider doit être en trigger et sur le même objet. Hook `Prepare()` appelé au début d'`Init`.
 - `BlockZone` : fait son propre overlap, l'affiche en gizmo et signale au LevelManager que la sauvegarde est interdite.
 - `MainMenu`, `PauseMenu`, `SettingsMenu`.
 - Interface `IInteractable` : aucune implémentation pour l'instant.

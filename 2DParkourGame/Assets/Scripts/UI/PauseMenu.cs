@@ -19,18 +19,23 @@ public class PauseMenu : MonoBehaviour
     /// <summary>Branche les boutons et masque le menu.</summary>
     void Awake()
     {
-        if (panel == null) { Debug.LogError("[PauseMenu] Panel manquant.", this); enabled = false; return; }
+        if (panel == null)
+        { Debug.LogError("[PauseMenu] Panel manquant.", this); enabled = false; return; }
+
         Bind(resume, () => GM.SetPaused(false));
         Bind(settings, () => { if (GM.Linker.Settings != null) GM.Linker.Settings.Open(); });
         Bind(quitToMenu, () => GM.LoadMenu());
         Bind(quitToDesktop, () => GM.QuitToDesktop());
+
         panel.SetActive(false);
     }
 
     /// <summary>Ajoute une action a un bouton (signale un bouton manquant).</summary>
     void Bind(Button b, UnityEngine.Events.UnityAction a)
     {
-        if (b == null) { Debug.LogWarning("[PauseMenu] Un bouton n'est pas assigne.", this); return; }
+        if (b == null)
+        { Debug.LogWarning("[PauseMenu] Un bouton n'est pas assigne.", this); return; }
+
         b.onClick.AddListener(() => { if (GM != null) a(); });
     }
 

@@ -26,8 +26,11 @@ public class BlockZone : MonoBehaviour
     void FixedUpdate()
     {
         if (GM == null || !GM.InGame) return;
+
         bool now = Physics2D.OverlapBox(Center, size, 0f, filter, hits) > 0 && hits.Contains(GM.Player.Collider);
-        if (now != inside) { inside = now; GM.Level.SetBlocked(this, now); }
+
+        if (now != inside)
+        { inside = now; GM.Level.SetBlocked(this, now); }
     }
 
     /// <summary>Se retire du LevelManager quand la zone est desactivee.</summary>

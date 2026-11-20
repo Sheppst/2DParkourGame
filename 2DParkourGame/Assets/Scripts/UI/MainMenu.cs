@@ -24,11 +24,14 @@ public class MainMenu : MonoBehaviour
     /// <summary>Verifie le GameManager, branche les boutons et regle Continuer selon la sauvegarde.</summary>
     void Start()
     {
-        if (GM == null) { Debug.LogError("[MainMenu] Aucun GameManager dans la scene.", this); return; }
+        if (GM == null)
+        { Debug.LogError("[MainMenu] Aucun GameManager dans la scene.", this); return; }
+
         Bind(newGame, () => { SaveSystem.Delete(); GM.LoadGame(false); });
         Bind(continueGame, () => GM.LoadGame(true));
         Bind(settings, () => { if (settingsMenu != null) settingsMenu.Open(); });
         Bind(quit, () => GM.QuitToDesktop());
+
         RefreshContinue();
     }
 
@@ -36,14 +39,20 @@ public class MainMenu : MonoBehaviour
     void RefreshContinue()
     {
         bool has = SaveSystem.TryLoad(out SaveData s), locked = has && s.Finished;
-        if (continueGame != null) { continueGame.gameObject.SetActive(has); continueGame.interactable = !locked; }
-        if (lockedText != null) { lockedText.text = lockedMessage; lockedText.gameObject.SetActive(locked); }
+
+        if (continueGame != null)
+        { continueGame.gameObject.SetActive(has); continueGame.interactable = !locked; }
+
+        if (lockedText != null)
+        { lockedText.text = lockedMessage; lockedText.gameObject.SetActive(locked); }
     }
 
     /// <summary>Ajoute une action a un bouton (signale un bouton manquant).</summary>
     void Bind(Button b, UnityEngine.Events.UnityAction a)
     {
-        if (b == null) { Debug.LogWarning("[MainMenu] Un bouton n'est pas assigne.", this); return; }
+        if (b == null)
+        { Debug.LogWarning("[MainMenu] Un bouton n'est pas assigne.", this); return; }
+
         b.onClick.AddListener(a);
     }
 }

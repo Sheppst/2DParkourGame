@@ -38,10 +38,12 @@ public class CameraFollow
         PlayerController c = GM.Player.Controller;
         float dt = Time.deltaTime;
         Vector2 a = Anchor;
+
         idle = c.IsMoving || !c.IsGrounded ? 0f : idle + dt;
         bool back = idle >= returnDelay;
         Vector2 target = back ? a : Slide(a, cam);
         center = Vector2.Lerp(center, target, 1f - Mathf.Exp(-(back ? returnEasing : easing) * dt));
+
         return center;
     }
 
@@ -51,8 +53,10 @@ public class CameraFollow
         float h = cam.orthographic ? cam.orthographicSize : 5f;
         Vector2 lim = new Vector2(h * cam.aspect, h) * (1f - reduction);
         Vector2 d = a - center, t = center;
+
         if (Mathf.Abs(d.x) > lim.x) t.x = a.x - Mathf.Sign(d.x) * lim.x;
         if (Mathf.Abs(d.y) > lim.y) t.y = a.y - Mathf.Sign(d.y) * lim.y;
+
         return t;
     }
 }

@@ -74,23 +74,29 @@ public class PlayerAnimator
         PlayerController c = GM.Player.Controller;
         PlayerMechanism m = GM.Player.Mechanism;
         float dt = Time.deltaTime;
-        ReadEvents(c, m);
+
+        ReadEvents(c, m, GM.Player.Death);
+
         facing = Mathf.MoveTowards(facing, c.Facing, 2f / turnDuration * dt);
         loopTime += dt;
+
         (Vector2 s, float a) = LoopPose(c);
         float k = 1f - Mathf.Exp(-blend * dt);
         curScale = Vector2.Lerp(curScale, s, k); curAngle = Mathf.Lerp(curAngle, a, k);
+
         (s, a) = shot.HasValue ? ShotPose(dt) : (curScale, curAngle);
+
         Transform v = GM.Player.Visual;
         v.localScale = new Vector3(s.x * facing, s.y, 1f);
         v.localRotation = Quaternion.Euler(0f, 0f, -a * c.Facing);
     }
 
     /// <summary>Lance les one-shots selon les evenements (priorite : mort, ecrasement, atterrissage, saut, interaction).</summary>
-    void ReadEvents(PlayerController c, PlayerMechanism m)
+    void ReadEvents(PlayerController c, PlayerMechanism m, PlayerDeath d)
     {
         if (shotHold) return;
-        if (m.JustDied) Play(die, true);
+
+        if (d.JustDied) Play(die, true);
         else if (m.JustCrashed) Play(crash);
         else if (m.JustLanded) Play(land);
         else if (c.JustJumped) Play(jump);
@@ -104,10 +110,13 @@ public class PlayerAnimator
     (Vector2, float) LoopPose(PlayerController c)
     {
         if (!c.IsGrounded) return c.Velocity.y < 0f ? fallAir.Pose(1f) : (Vector2.one, 0f);
+
         if (!c.IsMoving) return (Vector2.one, 0f);
+
         ScaleRotClip l = c.IsSneaking ? sneak : c.IsRunning ? run : move;
         float w = Mathf.Sin(loopTime * Mathf.PI * 2f / l.Duration);
         (Vector2 s, _) = l.Pose(Mathf.Abs(w));
+
         return (s, l.Angle * w);
     }
 
@@ -116,7 +125,9 @@ public class PlayerAnimator
     {
         ScaleRotClip clip = shot.Value;
         float t = Mathf.Clamp01((shotTime += dt) / clip.Duration);
+
         if (!shotHold && t >= 1f) shot = null;
+
         return clip.Pose(shotHold ? t : Mathf.Sin(t * Mathf.PI));
     }
 
@@ -124,6 +135,8 @@ public class PlayerAnimator
     internal void ResetState()
     {
         shot = null; shotHold = false; shotTime = loopTime = curAngle = 0f; facing = 1f; curScale = Vector2.one;
-        if (GM != null && GM.Player.IsBound) { GM.Player.Visual.localScale = Vector3.one; GM.Player.Visual.localRotation = Quaternion.identity; }
+
+        if (GM != null && GM.Player.IsBound)
+        { GM.Player.Visual.localScale = Vector3.one; GM.Player.Visual.localRotation = Quaternion.identity; }
     }
 }
