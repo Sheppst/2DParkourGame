@@ -112,7 +112,7 @@ Ordre dans `GameManager.Update` : Inputs → touche Échap (pause) → Player �
 - **Touches par défaut** : Q/D, Espace, E, Shift, F, Échap. Elles sont liées par caractère (`<Keyboard>/#(q)`) pour rester justes en AZERTY.
 - **Paramètres** : volume (`AudioListener`, PlayerPrefs), réassignation des touches, résolution.
 - **Distance des entités** : désactivation de l'objet entier.
-- **Forme du joueur (spec)** : cube de base de taille 2, avec des proportions par côté (gauche 0.5, bas 1, droite 0.5, haut 0.75 de 2). Le collider reste à 0.5 × 1 ; le sprite généré (0.5 × 0.9) donne l'apparence, plus besoin du cube d'exemple.
+- **Forme du joueur (spec)** : cube de base de taille 2, avec des proportions par côté (gauche 0.5, bas 1, droite 0.5, haut 0.75 de 2). Le collider colle à l'apparence du sprite généré : 0,5 × 0,90625 (16 × 29 pixels), offset 0,453125, pivot aux pieds. Plus besoin du cube d'exemple.
 
 ## Environnement
 - Unity **6000.3.9f1** (Unity 6.3), URP 2D.

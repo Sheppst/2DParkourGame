@@ -32,10 +32,10 @@ public static class PieParPieSetup
     const string TmpPackage = "Packages/com.unity.ugui/Package Resources/TMP Essential Resources.unitypackage";
     /// <summary>Asset d'actions contenant la map UI.</summary>
     const string UiActions = "Assets/InputSystem_Actions.inputactions";
-    /// <summary>Largeur du joueur placeholder (provisoire, plus haut que large).</summary>
+    /// <summary>Largeur du joueur : celle du personnage dessine (16 pixels sur 32, plus haut que large).</summary>
     const float PW = 0.5f;
-    /// <summary>Hauteur du joueur placeholder (tient dans une case).</summary>
-    const float PH = 1f;
+    /// <summary>Hauteur du joueur : celle du personnage dessine (29 pixels sur 32), pour que le collider colle a son apparence.</summary>
+    const float PH = 29f / 32f;
 
     /// <summary>Sprite blanc 1x1 unite.</summary>
     static Sprite white;
