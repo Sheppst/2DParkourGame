@@ -20,7 +20,24 @@ public struct ScaleRotClip
     public readonly (Vector2 scale, float angle) Pose(float w) => (Vector2.LerpUnclamped(Vector2.one, Scale, w), Angle * w);
 }
 
-/// <summary>Racine 2 : anime le pivot visuel du joueur par scale/rotation selon ses etats.</summary>
+/// <summary>Animation image par image du corps et de l'echarpe (environ 3 a 4 transitions de 2 images).</summary>
+[Serializable]
+public struct SpriteClip
+{
+    /// <summary>Duree d'affichage d'une image (s).</summary>
+    [Min(0.01f)] public float FrameTime;
+    /// <summary>Images du corps.</summary>
+    public Sprite[] Body;
+    /// <summary>Images de l'echarpe, une par image du corps (l'echarpe de repos est gardee s'il en manque).</summary>
+    public Sprite[] Scarf;
+
+    /// <summary>Vrai si le clip a au moins une image.</summary>
+    public readonly bool IsValid => Body != null && Body.Length > 0 && Body[0] != null;
+    /// <summary>Duree totale du clip (s).</summary>
+    public readonly float Length => IsValid ? Body.Length * FrameTime : 0f;
+}
+
+/// <summary>Racine 2 : anime le pivot visuel du joueur par scale/rotation selon ses etats, et change les images du corps pour certaines poses.</summary>
 [Serializable]
 public class PlayerAnimator
 {
@@ -46,6 +63,10 @@ public class PlayerAnimator
     [SerializeField, Min(0.01f)] float turnDuration = 0.12f;
     /// <summary>Vitesse de fondu entre les poses de boucle.</summary>
     [SerializeField, Min(0f)] float blend = 15f;
+    /// <summary>Images : saut sur place (la derniere image est gardee jusqu'a l'atterrissage).</summary>
+    [SerializeField] SpriteClip jumpInPlace = new() { FrameTime = 0.07f };
+    /// <summary>Images : empale sur une pique de mur (la derniere image est gardee jusqu'a la reapparition).</summary>
+    [SerializeField] SpriteClip impale = new() { FrameTime = 0.12f };
 
     /// <summary>One-shot en cours (null si aucun).</summary>
     ScaleRotClip? shot;
@@ -61,12 +82,29 @@ public class PlayerAnimator
     Vector2 curScale = Vector2.one;
     /// <summary>Angle de boucle lisse courant.</summary>
     float curAngle;
+    /// <summary>Clip d'images en cours (null : images de repos).</summary>
+    SpriteClip? frames;
+    /// <summary>Temps ecoule du clip d'images.</summary>
+    float frameTime;
+    /// <summary>Image de repos du corps (celle du prefab).</summary>
+    Sprite idleBody;
+    /// <summary>Image de repos de l'echarpe (celle du prefab).</summary>
+    Sprite idleScarf;
 
     /// <summary>Initialisation independante de la scene.</summary>
     internal void Awake() => ResetState();
 
     /// <summary>Liaison a la scene.</summary>
-    internal void Bind() => ResetState();
+    internal void Bind()
+    {
+        SceneLinker l = GM.Linker;
+        idleBody = l.PlayerSprite != null ? l.PlayerSprite.sprite : null;
+        idleScarf = l.ScarfSprite != null ? l.ScarfSprite.sprite : null;
+
+        if (l.PlayerSprite == null) Debug.LogWarning("[PlayerAnimator] PlayerSprite non assigne dans le SceneLinker : animations image par image desactivees.", l);
+
+        ResetState();
+    }
 
     /// <summary>Frame : choisit et applique la pose.</summary>
     internal void Tick()
@@ -77,8 +115,11 @@ public class PlayerAnimator
 
         ReadEvents(c, m, GM.Player.Death);
 
-        facing = Mathf.MoveTowards(facing, c.Facing, 2f / turnDuration * dt);
+        int dir = GM.Player.Death.ImpaleSide != 0 ? GM.Player.Death.ImpaleSide : c.Facing;
+        facing = Mathf.MoveTowards(facing, dir, 2f / turnDuration * dt);
         loopTime += dt;
+
+        TickFrames(c, dt);
 
         (Vector2 s, float a) = LoopPose(c);
         float k = 1f - Mathf.Exp(-blend * dt);
@@ -88,7 +129,7 @@ public class PlayerAnimator
 
         Transform v = GM.Player.Visual;
         v.localScale = new Vector3(s.x * facing, s.y, 1f);
-        v.localRotation = Quaternion.Euler(0f, 0f, -a * c.Facing);
+        v.localRotation = Quaternion.Euler(0f, 0f, -a * dir);
     }
 
     /// <summary>Lance les one-shots selon les evenements (priorite : mort, ecrasement, atterrissage, saut, interaction).</summary>
@@ -96,11 +137,48 @@ public class PlayerAnimator
     {
         if (shotHold) return;
 
-        if (d.JustDied) Play(die, true);
+        if (d.JustDied && d.ImpaleSide != 0 && impale.IsValid)
+        { shot = null; shotHold = true; PlayFrames(impale); }
+        else if (d.JustDied) Play(die, true);
         else if (m.JustCrashed) Play(crash);
         else if (m.JustLanded) Play(land);
-        else if (c.JustJumped) Play(jump);
+        else if (c.JustJumped)
+        { Play(jump); if (!c.IsMoving && jumpInPlace.IsValid) PlayFrames(jumpInPlace); }
         else if (m.JustInteracted) Play(interact);
+    }
+
+    /// <summary>Demarre un clip d'images.</summary>
+    void PlayFrames(SpriteClip clip) { frames = clip; frameTime = 0f; }
+
+    /// <summary>Avance le clip d'images : derniere image gardee en l'air ou mort, retour au repos a l'atterrissage.</summary>
+    void TickFrames(PlayerController c, float dt)
+    {
+        if (!frames.HasValue) return;
+
+        SpriteClip clip = frames.Value;
+        frameTime += dt;
+
+        if (!GM.Player.Death.IsDead && c.IsGrounded && !c.JustJumped && frameTime > clip.FrameTime)
+        { StopFrames(); return; }
+
+        int i = Mathf.Min(clip.Body.Length - 1, Mathf.FloorToInt(frameTime / clip.FrameTime));
+        bool scarf = clip.Scarf != null && i < clip.Scarf.Length && clip.Scarf[i] != null;
+
+        SetSprites(clip.Body[i] != null ? clip.Body[i] : idleBody, scarf ? clip.Scarf[i] : idleScarf);
+    }
+
+    /// <summary>Arrete le clip d'images et remet les images de repos.</summary>
+    void StopFrames() { frames = null; frameTime = 0f; SetSprites(idleBody, idleScarf); }
+
+    /// <summary>Applique les images du corps et de l'echarpe (renderers absents ignores).</summary>
+    static void SetSprites(Sprite body, Sprite scarf)
+    {
+        SceneLinker l = GM.Linker;
+
+        if (l == null) return;
+
+        if (l.PlayerSprite != null && body != null && l.PlayerSprite.sprite != body) l.PlayerSprite.sprite = body;
+        if (l.ScarfSprite != null && scarf != null && l.ScarfSprite.sprite != scarf) l.ScarfSprite.sprite = scarf;
     }
 
     /// <summary>Demarre un one-shot.</summary>
@@ -135,6 +213,8 @@ public class PlayerAnimator
     internal void ResetState()
     {
         shot = null; shotHold = false; shotTime = loopTime = curAngle = 0f; facing = 1f; curScale = Vector2.one;
+
+        if (frames.HasValue) StopFrames();
 
         if (GM != null && GM.Player.IsBound)
         { GM.Player.Visual.localScale = Vector3.one; GM.Player.Visual.localRotation = Quaternion.identity; }

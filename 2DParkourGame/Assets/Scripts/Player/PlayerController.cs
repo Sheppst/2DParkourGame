@@ -22,6 +22,8 @@ public class PlayerController
     [SerializeField, Min(0f)] float runSpeed = 7f;
     /// <summary>Vitesse en deplacement prudent (unites/s).</summary>
     [SerializeField, Min(0f)] float sneakSpeed = 1.5f;
+    /// <summary>Duree de la baisse progressive de la vitesse de course a la vitesse de marche une fois en l'air (s).</summary>
+    [SerializeField, Min(0.01f)] float airRunDecay = 0.5f;
     /// <summary>Gravite appliquee via le ConstantForce2D (unites/s2).</summary>
     [SerializeField, Min(0f)] float gravity = 30f;
     /// <summary>Vitesse verticale donnee au saut.</summary>
@@ -72,6 +74,8 @@ public class PlayerController
     bool cutDone;
     /// <summary>Vitesse verticale au dernier pas physique en l'air.</summary>
     float lastAirVy;
+    /// <summary>Vitesse horizontale maximale courante : fixee au sol, puis ramenee peu a peu a la marche en l'air.</summary>
+    float moveSpeed;
     /// <summary>Filtre de detection du sol.</summary>
     ContactFilter2D filter;
     /// <summary>Tampon de resultats de detection (evite les allocations).</summary>
@@ -115,8 +119,8 @@ public class PlayerController
 
         float input = Locked ? 0f : Mathf.Clamp(i.MoveX, -1f, 1f);
         IsSneaking = !Locked && i.SneakHeld;
-        IsRunning = !Locked && !IsSneaking && i.RunHeld && input != 0f;
-        v.x = input * (IsSneaking ? sneakSpeed : IsRunning ? runSpeed : walkSpeed);
+        UpdateMoveSpeed(i.RunHeld && input != 0f);
+        v.x = input * (IsSneaking ? sneakSpeed : moveSpeed);
 
         if (IsSneaking && IsGrounded && v.x != 0f && !Probe(new Vector2(v.x * Time.fixedDeltaTime, 0f))) v.x = 0f;
 
@@ -133,6 +137,18 @@ public class PlayerController
         { v.y *= jumpCut; cutDone = true; }
 
         b.linearVelocity = Velocity = v;
+    }
+
+    /// <summary>Au sol, la touche de course choisit la vitesse. En l'air, elle n'a aucun effet : la vitesse prise au sol
+    /// redescend progressivement a la vitesse de marche en airRunDecay secondes.</summary>
+    void UpdateMoveSpeed(bool runWanted)
+    {
+        if (IsGrounded)
+        { IsRunning = !Locked && !IsSneaking && runWanted; moveSpeed = IsRunning ? runSpeed : walkSpeed; return; }
+
+        float step = Mathf.Abs(runSpeed - walkSpeed) / airRunDecay * Time.fixedDeltaTime;
+        moveSpeed = Mathf.MoveTowards(moveSpeed, walkSpeed, step);
+        IsRunning = moveSpeed > walkSpeed;
     }
 
     /// <summary>Vrai si le joueur peut sauter : au sol, ou dans la distance coyote apres avoir quitte un bord sans sauter.</summary>
@@ -162,7 +178,7 @@ public class PlayerController
     internal void ResetState()
     {
         bufferTimer = lastAirVy = LandingSpeed = 0f; jumpedSinceGround = cutDone = Locked = false;
-        IsGrounded = IsMoving = IsRunning = IsSneaking = false; Velocity = Vector2.zero; Facing = 1;
+        IsGrounded = IsMoving = IsRunning = IsSneaking = false; Velocity = Vector2.zero; Facing = 1; moveSpeed = walkSpeed;
         lastGroundX = GM != null && GM.Player.IsBound ? GM.Player.Position.x : 0f;
 
         ClearEvents();

@@ -31,9 +31,11 @@ public class GameManager : MonoBehaviour
     /// <summary>Vrai si une scene de jeu est liee et prete.</summary>
     public bool InGame => Linker != null;
 
-    /// <summary>Securise le singleton, instancie les racines 1 et relaie Awake.</summary>
+    /// <summary>Relache les objets du niveau, securise le singleton, instancie les racines 1 et relaie Awake.</summary>
     void Awake()
     {
+        ReleaseChildren();
+
         if (GM != null && GM != this)
         { Destroy(gameObject); return; }
 
@@ -43,6 +45,19 @@ public class GameManager : MonoBehaviour
         Inputs ??= new(); Player ??= new(); Entities ??= new(); Level ??= new(); Cam ??= new();
         Inputs.Awake(); Player.Awake(); Entities.Awake(); Level.Awake(); Cam.Awake();
         SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    /// <summary>Sort les enfants (joueur, camera, UI, SceneLinker...) dans la scene du niveau, avant DontDestroyOnLoad qui les emporterait,
+    /// et meme si ce GameManager est un doublon. Un enfant desactive dans l'editeur est detruit : il n'existe pas dans ce niveau.</summary>
+    void ReleaseChildren()
+    {
+        while (transform.childCount > 0)
+        {
+            Transform c = transform.GetChild(0);
+            c.SetParent(null, true);
+
+            if (!c.gameObject.activeSelf) Destroy(c.gameObject);
+        }
     }
 
     /// <summary>Relaie OnEnable.</summary>

@@ -16,7 +16,7 @@ public static class TrapSnapper
     const float Grid = 0.5f;
 
     /// <summary>Pieges modifies en attente d'alignement, avec l'heure de leur derniere modification.</summary>
-    static readonly Dictionary<int, double> pending = new();
+    static readonly Dictionary<Component, double> pending = new();
     /// <summary>Tampon de resultats de raycast (evite les allocations).</summary>
     static readonly List<RaycastHit2D> hits = new();
 
@@ -49,7 +49,7 @@ public static class TrapSnapper
     /// <summary>Met en attente le piege auquel appartient l'objet modifie (lui-meme ou un parent).</summary>
     static void Mark(int id)
     {
-        Object o = EditorUtility.InstanceIDToObject(id);
+        Object o = EditorUtility.EntityIdToObject(id);
         GameObject go = o as GameObject;
 
         if (go == null && o is Component comp) go = comp.gameObject;
@@ -58,7 +58,7 @@ public static class TrapSnapper
 
         Component trap = Target(go);
 
-        if (trap != null) pending[trap.GetInstanceID()] = EditorApplication.timeSinceStartup;
+        if (trap != null) pending[trap] = EditorApplication.timeSinceStartup;
     }
 
     /// <summary>Piege concerne par un objet : une SpikeStrip ou un Trap, sur l'objet ou un de ses parents.</summary>
@@ -75,20 +75,20 @@ public static class TrapSnapper
         if (pending.Count == 0 || EditorApplication.isPlayingOrWillChangePlaymode || GUIUtility.hotControl != 0) return;
 
         double now = EditorApplication.timeSinceStartup;
-        var ready = new List<int>();
+        var ready = new List<Component>();
 
-        foreach (KeyValuePair<int, double> kv in pending)
+        foreach (KeyValuePair<Component, double> kv in pending)
         { if (now - kv.Value >= SnapDelay) ready.Add(kv.Key); }
 
         if (ready.Count == 0) return;
 
         Physics2D.SyncTransforms();
 
-        foreach (int id in ready)
+        foreach (Component o in ready)
         {
-            pending.Remove(id);
+            pending.Remove(o);
 
-            Object o = EditorUtility.InstanceIDToObject(id);
+            if (o == null) continue;
 
             if (o is SpikeStrip s) SnapStrip(s);
             else if (o is Trap t) SnapTrap(t);

@@ -6,7 +6,7 @@ using UnityEditor.Tilemaps;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 
-/// <summary>Outil editeur : genere par code le pixel art du jeu (32 px par bloc), les tiles, le Rule Tile, la Tile Palette,
+/// <summary>Outil editeur : genere par code le pixel art du jeu (32 px par bloc), les tiles, la Tile Palette,
 /// le prefab SpikeStrip et la scene Art_Preview.</summary>
 public static class PieParPieArt
 {
@@ -20,10 +20,16 @@ public static class PieParPieArt
     const string TileDir = Root + "/Tiles";
     /// <summary>Dossier de la palette.</summary>
     const string PaletteDir = Root + "/Palettes";
-    /// <summary>Chemin du Rule Tile du sol.</summary>
-    const string RuleTilePath = TileDir + "/Ground_Rule.asset";
+    /// <summary>Chemin de l'ancien Rule Tile du sol (supprime s'il existe encore).</summary>
+    const string OldRuleTilePath = TileDir + "/Ground_Rule.asset";
     /// <summary>Chemin du prefab de la bande de piques.</summary>
     const string SpikePrefabPath = "Assets/Prefabs/SpikeStrip.prefab";
+    /// <summary>Dossier des images d'animation du joueur (corps et echarpe).</summary>
+    const string PoseDir = SpriteDir + "/Poses";
+    /// <summary>Chemin du prefab GameManager (images d'animation et renderers assignes).</summary>
+    const string GameManagerPrefabPath = "Assets/Prefabs/GameManager.prefab";
+    /// <summary>Chemin du prefab Finish (arche et portail).</summary>
+    const string FinishPrefabPath = "Assets/Prefabs/Finish.prefab";
     /// <summary>Chemin de la scene de previsualisation.</summary>
     const string PreviewScenePath = "Assets/Scenes/Art_Preview.unity";
     /// <summary>Pixels par unite (1 bloc = 32 px).</summary>
@@ -57,9 +63,9 @@ public static class PieParPieArt
         {
             AssetDatabase.StartAssetEditing();
 
-            foreach (string d in new[] { SpriteDir, GroundDir, TileDir, PaletteDir }) Directory.CreateDirectory(d);
+            foreach (string d in new[] { SpriteDir, GroundDir, PoseDir, TileDir, PaletteDir }) Directory.CreateDirectory(d);
 
-            WriteGroundPngs(); WriteObjectPngs();
+            WriteGroundPngs(); WriteObjectPngs(); WritePosePngs();
         }
         finally
         { AssetDatabase.StopAssetEditing(); }
@@ -70,13 +76,17 @@ public static class PieParPieArt
         Sprites s = ImportObjects();
 
         Dictionary<int, Tile[]> tiles = CreateTiles(ground);
-        RuleTile rule = CreateRuleTile(ground);
-        CreatePalette(tiles, rule);
+
+        if (AssetDatabase.DeleteAsset(OldRuleTilePath)) Debug.Log("[PieParPieArt] Ancien Rule Tile supprime.");
+
+        CreatePalette(tiles);
         GameObject spike = CreateSpikePrefab(s.Spike);
-        BuildPreviewScene(rule, s, spike);
+        UpdateFinishPrefab(s.Arch, s.Portal);
+        ApplyPoses(ImportPoses());
+        BuildPreviewScene(tiles, s, spike);
 
         AssetDatabase.SaveAssets();
-        Debug.Log("[PieParPieArt] Pixel art, tiles, Rule Tile, palette, prefab SpikeStrip et scene Art_Preview generes.");
+        Debug.Log("[PieParPieArt] Pixel art, tiles, palette, poses, prefabs SpikeStrip et Finish, scene Art_Preview generes.");
     }
 
     /// <summary>Point d'entree en batchmode (-executeMethod PieParPieArt.RunBatch).</summary>
@@ -350,7 +360,8 @@ public static class PieParPieArt
         var scarf = new Canvas(C, C); DrawGrid(scarf, ScarfRows, px, M + PlayerRows.Length - ScarfRow - ScarfRows.Length); WritePng($"{SpriteDir}/Scarf.png", scarf);
         WritePng($"{SpriteDir}/Coin.png", Coin());
         WritePng($"{SpriteDir}/Spike.png", Spike());
-        WritePng($"{SpriteDir}/Portal.png", Portal());
+        WritePng($"{SpriteDir}/Arch.png", Gate(true, false));
+        WritePng($"{SpriteDir}/Portal.png", Gate(false, true));
     }
 
     /// <summary>Piece doree classique : ovale vertical, contour, fente centrale, reflet.</summary>
@@ -405,8 +416,8 @@ public static class PieParPieArt
         return c;
     }
 
-    /// <summary>Portail rose-violet dans une arche en bois aux bords droits : 1 bloc de large, 4 de haut.</summary>
-    static Canvas Portal()
+    /// <summary>Arche en bois aux bords droits (1 bloc de large, 4 de haut) et/ou portail rose-violet a l'interieur, sur deux images separees.</summary>
+    static Canvas Gate(bool drawWood, bool drawSwirl)
     {
         int w = PPU, h = PPU * 4;
         var c = new Canvas(w, h);
@@ -421,6 +432,8 @@ public static class PieParPieArt
 
                 if (isPost || isBeam || isSill)
                 {
+                    if (!drawWood) continue;
+
                     bool border = x == 0 || x == w - 1 || y == 0 || y == h - 1;
                     bool outline = border || (isBeam && y == h - beam && !isPost) || (isPost && !isBeam && (x == post - 1 || x == w - post));
                     float g = isBeam || isSill ? Rand(x / 5, y, 41) : Rand(x, y / 5, 43);
@@ -428,6 +441,8 @@ public static class PieParPieArt
                     c.Set(x, y, outline ? woodLine : g < 0.2f ? woodDark : g > 0.8f ? woodLight : wood);
                     continue;
                 }
+
+                if (!drawSwirl) continue;
 
                 float nx = (x + 0.5f - w * 0.5f) / (w * 0.5f - post), ny = (y + 0.5f - (sill + (h - beam - sill) * 0.5f)) / ((h - beam - sill) * 0.5f);
                 float r = Mathf.Sqrt(nx * nx + ny * ny * 0.35f), a = Mathf.Atan2(ny, nx) / (Mathf.PI * 2f);
@@ -440,10 +455,145 @@ public static class PieParPieArt
                 c.Set(x, y, Rand(x, y, 47) < 0.012f ? (Color32)Color.white : swirl[k]);
             }
 
-        foreach (int nxp in new[] { 1, w - 2 })
+        if (drawWood) foreach (int nxp in new[] { 1, w - 2 })
         { c.Set(nxp, h - 3, nail); c.Set(nxp, h - beam + 2, nail); }
 
         return c;
+    }
+
+    // ------------------------------------------------------------------ Poses du joueur
+
+    /// <summary>Morceau du personnage : des lignes placees a partir de la ligne Top de la grille complete (0 = haut, '.' = transparent).</summary>
+    readonly struct Part
+    {
+        /// <summary>Ligne de la grille complete ou commence le morceau.</summary>
+        public readonly int Top;
+        /// <summary>Lignes du morceau, la premiere en haut.</summary>
+        public readonly string[] Rows;
+
+        /// <summary>Cree un morceau.</summary>
+        public Part(int top, params string[] rows) { Top = top; Rows = rows; }
+    }
+
+    /// <summary>Une image d'animation : morceaux decales (dx vers la droite, dy vers le haut, en pixels) et decalage de la tete (echarpe).</summary>
+    readonly struct Pose
+    {
+        /// <summary>Morceaux dans l'ordre de dessin (le dernier passe devant).</summary>
+        public readonly (Part part, int dx, int dy)[] Layers;
+        /// <summary>Decalage horizontal de la tete, suivi par l'echarpe.</summary>
+        public readonly int HeadX;
+        /// <summary>Decalage vertical de la tete, suivi par l'echarpe.</summary>
+        public readonly int HeadY;
+
+        /// <summary>Cree une image a partir des morceaux : bras arriere, jambes, torse, tete, bras avant.
+        /// (ux, uy) decale tout le haut du corps, (hx, hy) la tete en plus.</summary>
+        public Pose(Part head, Part torso, Part legs, (Part p, int dx, int dy) front, (Part p, int dx, int dy) back, int ux = 0, int uy = 0, int hx = 0, int hy = 0)
+        {
+            HeadX = ux + hx; HeadY = uy + hy;
+            Layers = new[] { (back.p, back.dx + ux, back.dy + uy), (legs, 0, 0), (torso, ux, uy), (head, HeadX, HeadY), (front.p, front.dx + ux, front.dy + uy) };
+        }
+    }
+
+    /// <summary>Copie des lignes de la grille du personnage.</summary>
+    static string[] Rows(int from, int count) { var r = new string[count]; System.Array.Copy(PlayerRows, from, r, 0, count); return r; }
+
+    /// <summary>Tete dont les deux lignes des yeux (8 et 9) sont remplacees.</summary>
+    static Part Head(string eyesTop, string eyesBottom) { string[] r = Rows(0, 14); r[8] = eyesTop; r[9] = eyesBottom; return new(0, r); }
+
+    /// <summary>Tete : normale, plissee par l'effort, yeux fermes.</summary>
+    static readonly Part HeadOpen = new(0, Rows(0, 14)), HeadSquint = Head(".KhhSSSSSKKSSK..", ".KhhSSSSSSSSSSK."),
+        HeadClosed = Head(".KhhSSSSSSSSSK..", ".KhhSSSSSKKSSSK.");
+
+    /// <summary>Torse sans les bras : normal, et t-shirt gonfle par l'air.</summary>
+    static readonly Part Torso = new(14, "...KTTTTTTTK....", "...KTTTTTTTTK...", "....KTTTTTTK....", "....KTTTTTTK....", "....KTTTTTTK....", "....KttttttK...."),
+        TorsoPuffed = new(14, "...KTTTTTTTK....", "...KTTTTTTTTK...", "....KTTTTTTK....", "...KTTTTTTTTK...", "...KTTTTTTTTK...", "...KttttttttK...");
+
+    /// <summary>Bras le long du corps : avant (gauche de la grille) et arriere (droite).</summary>
+    static readonly Part ArmFront = new(15, "..KU", ".KUTK", ".KTtK", ".KSSK", ".KSSK", "..KKK"),
+        ArmBack = new(16, "...........KTK..", "...........KtK..", "...........KSSK.", "...........KSSK.", "...........KKK..");
+
+    /// <summary>Bras ecartes a l'horizontale (avant vers la gauche, a decaler de -3 ; arriere vers la droite).</summary>
+    static readonly Part ArmFrontOut = new(15, "..KKKKK", "KSSTUTK", "KSStTtK", ".KKKKK."),
+        ArmBackOut = new(15, "...........KKKKK.", "..........KTUTSSK", "..........KtTtSSK", "...........KKKKK.");
+
+    /// <summary>Bras tendu vers l'avant et le bas (mains sur la pique).</summary>
+    static readonly Part ArmReach = new(15, "..KKKK..........", ".KUTTTKK........", ".KTtttTSKK......", "..KKKKSSSSKK....", "......KKKSSSK...", ".........KKK....");
+
+    /// <summary>Jambes : normales, sur la pointe des pieds, ecartees pieds pointes, accroupies (2 px plus courtes).</summary>
+    static readonly Part Legs = new(20, Prepend(".....PPPPPP.....", Rows(21, 8))),
+        LegsToe = new(20, Prepend(".....PPPPPP.....", Rows(21, 6), "...KBBBK.KBBBK..", "....KbbK..KbbK..")),
+        LegsApart = new(20, ".....PPPPPP.....", "....KPPPPPPPK...", "....KPQPPPQPK...", "...KPQPKKPQPK...", "...KPPPK.KPPPK..",
+            "..KpPK....KpPK..", "..KpPK....KpPK..", "..KBBK....KBBK..", "...KbK....KbK..."),
+        LegsCrouch = new(22, ".....PPPPPP.....", "...KPPPPPPPPK...", "...KPQPPPPQPK...", "..KPPQPKKPQPPK..", "..KpPPK..KPPpK..",
+            "..KBBBK..KBBBK..", ".KbbbbK..KbbbbK.");
+
+    /// <summary>Concatene une ligne, des lignes et d'autres lignes.</summary>
+    static string[] Prepend(string first, string[] middle, params string[] last)
+    {
+        var r = new List<string> { first };
+        r.AddRange(middle); r.AddRange(last);
+
+        return r.ToArray();
+    }
+
+    /// <summary>Saut sur place, 3 transitions de 2 images : impulsion (accroupi, pointe des pieds), montee (bras un peu leves,
+    /// t-shirt gonfle, jambes ecartees, pieds pointes vers le sol), sommet (redescente des bras, gardee jusqu'a l'atterrissage).</summary>
+    static readonly Pose[] JumpPoses =
+    {
+        new(HeadOpen, Torso, LegsCrouch, (ArmFront, 0, 0), (ArmBack, 0, 0), 0, -2),
+        new(HeadOpen, Torso, LegsToe, (ArmFront, 0, 1), (ArmBack, 0, 1)),
+        new(HeadOpen, TorsoPuffed, LegsApart, (ArmFront, 0, 1), (ArmBack, 0, 1)),
+        new(HeadOpen, TorsoPuffed, LegsApart, (ArmFront, 0, 2), (ArmBack, 0, 2)),
+        new(HeadOpen, TorsoPuffed, LegsApart, (ArmFront, 0, 2), (ArmBack, 0, 2), 0, 1),
+        new(HeadOpen, TorsoPuffed, LegsApart, (ArmFront, 0, 1), (ArmBack, 0, 1)),
+    };
+
+    /// <summary>Empale sur une pique de mur, 3 transitions de 2 images : il remarque (bras ecartes, bras sur la pique),
+    /// il tente de s'extirper (effort 1, effort 2), la tete s'effondre sur la pique (yeux ouverts, yeux fermes).</summary>
+    static readonly Pose[] ImpalePoses =
+    {
+        new(HeadOpen, Torso, Legs, (ArmFrontOut, -3, 1), (ArmBackOut, 0, 1)),
+        new(HeadOpen, Torso, Legs, (ArmReach, 0, 0), (ArmReach, 1, 1)),
+        new(HeadSquint, Torso, Legs, (ArmReach, 0, 0), (ArmReach, 1, 1), -1, 0),
+        new(HeadSquint, Torso, LegsToe, (ArmReach, 0, 0), (ArmReach, 1, 1), -2, -1),
+        new(HeadOpen, Torso, LegsToe, (ArmFront, 0, -1), (ArmBack, 0, -1), 0, 0, 1, -2),
+        new(HeadClosed, Torso, LegsToe, (ArmFront, 0, -1), (ArmBack, 0, -1), 0, 0, 1, -2),
+    };
+
+    /// <summary>Animations image par image du joueur, par nom de fichier.</summary>
+    static readonly (string name, Pose[] poses)[] PoseClips = { ("Jump", JumpPoses), ("Impale", ImpalePoses) };
+
+    /// <summary>Chemin du PNG d'une image d'animation (what = Player ou Scarf).</summary>
+    static string PosePath(string what, string clip, int i) => $"{PoseDir}/{what}_{clip}_{i}.png";
+
+    /// <summary>Ecrit le corps et l'echarpe de chaque image d'animation.</summary>
+    static void WritePosePngs()
+    {
+        int px = (C - 16) / 2;
+
+        foreach ((string name, Pose[] poses) in PoseClips)
+            for (int i = 0; i < poses.Length; i++)
+            {
+                var body = new Canvas(C, C); DrawPose(body, poses[i], px); WritePng(PosePath("Player", name, i), body);
+
+                var scarf = new Canvas(C, C);
+                DrawGrid(scarf, ScarfRows, px + poses[i].HeadX, M + PlayerRows.Length - ScarfRow - ScarfRows.Length + poses[i].HeadY);
+                WritePng(PosePath("Scarf", name, i), scarf);
+            }
+    }
+
+    /// <summary>Dessine les morceaux d'une image, pieds de la grille complete en y = M.</summary>
+    static void DrawPose(Canvas c, Pose p, int px)
+    {
+        foreach ((Part part, int dx, int dy) in p.Layers)
+            for (int r = 0; r < part.Rows.Length; r++)
+            {
+                int y = M + PlayerRows.Length - 1 - (part.Top + r) + dy;
+
+                for (int i = 0; i < part.Rows[r].Length; i++)
+                    if (CharColors.TryGetValue(part.Rows[r][i], out Color32 col)) c.Set(px + i + dx, y, col);
+                    else if (part.Rows[r][i] != '.') Debug.LogWarning($"[PieParPieArt] Caractere inconnu '{part.Rows[r][i]}' dans une pose.");
+            }
     }
 
     // ------------------------------------------------------------------ Import
@@ -504,7 +654,9 @@ public static class PieParPieArt
         public Sprite Coin;
         /// <summary>Une pique.</summary>
         public Sprite Spike;
-        /// <summary>Portail avec son arche.</summary>
+        /// <summary>Arche en bois vide.</summary>
+        public Sprite Arch;
+        /// <summary>Portail seul (interieur de l'arche).</summary>
         public Sprite Portal;
     }
 
@@ -517,15 +669,36 @@ public static class PieParPieArt
         {
             Player = ImportSprite($"{SpriteDir}/Player.png", feet), Scarf = ImportSprite($"{SpriteDir}/Scarf.png", feet),
             Coin = ImportSprite($"{SpriteDir}/Coin.png", new Vector2(0.5f, 0.5f)), Spike = ImportSprite($"{SpriteDir}/Spike.png", new Vector2(0.5f, 0f)),
-            Portal = ImportSprite($"{SpriteDir}/Portal.png", new Vector2(0.5f, 0f)),
+            Arch = ImportSprite($"{SpriteDir}/Arch.png", new Vector2(0.5f, 0f)), Portal = ImportSprite($"{SpriteDir}/Portal.png", new Vector2(0.5f, 0f)),
         };
+    }
+
+    /// <summary>Importe les images d'animation (pivot aux pieds), par nom de clip : corps et echarpe.</summary>
+    static Dictionary<string, (Sprite[] body, Sprite[] scarf)> ImportPoses()
+    {
+        var feet = new Vector2(0.5f, (float)M / C);
+        var d = new Dictionary<string, (Sprite[], Sprite[])>();
+
+        foreach ((string name, Pose[] poses) in PoseClips)
+        {
+            var body = new Sprite[poses.Length]; var scarf = new Sprite[poses.Length];
+
+            for (int i = 0; i < poses.Length; i++)
+            { body[i] = ImportSprite(PosePath("Player", name, i), feet); scarf[i] = ImportSprite(PosePath("Scarf", name, i), feet); }
+
+            d[name] = (body, scarf);
+        }
+
+        return d;
     }
 
     // ------------------------------------------------------------------ Tiles
 
-    /// <summary>Cree ou met a jour un asset (le GUID est conserve si l'asset existe deja).</summary>
+    /// <summary>Cree ou met a jour un asset (le GUID est conserve si l'asset existe deja) ; son nom interne est celui du fichier.</summary>
     static T SaveAsset<T>(T fresh, string path) where T : Object
     {
+        fresh.name = Path.GetFileNameWithoutExtension(path);
+
         T existing = AssetDatabase.LoadAssetAtPath<T>(path);
 
         if (existing == null)
@@ -557,32 +730,6 @@ public static class PieParPieArt
         return d;
     }
 
-    /// <summary>Cree le Rule Tile : une regle par combinaison de 4 voisins (haut, bas, gauche, droite), variantes au hasard.</summary>
-    static RuleTile CreateRuleTile(Dictionary<int, Sprite[]> ground)
-    {
-        var rt = ScriptableObject.CreateInstance<RuleTile>();
-        rt.m_DefaultSprite = ground[0][0]; rt.m_DefaultColliderType = Tile.ColliderType.Grid;
-
-        var dirs = new[] { (Vector3Int.up, T), (Vector3Int.down, B), (Vector3Int.left, L), (Vector3Int.right, R) };
-
-        for (int m = 0; m < 16; m++)
-        {
-            var rule = new RuleTile.TilingRule { m_Id = m, m_Sprites = ground[m], m_ColliderType = Tile.ColliderType.Grid };
-            rule.m_Output = RuleTile.TilingRuleOutput.OutputSprite.Random;
-            rule.m_NeighborPositions = new List<Vector3Int>(); rule.m_Neighbors = new List<int>();
-
-            foreach ((Vector3Int p, int bit) in dirs)
-            {
-                rule.m_NeighborPositions.Add(p);
-                rule.m_Neighbors.Add((m & bit) != 0 ? RuleTile.TilingRuleOutput.Neighbor.NotThis : RuleTile.TilingRuleOutput.Neighbor.This);
-            }
-
-            rt.m_TilingRules.Add(rule);
-        }
-
-        return SaveAsset(rt, RuleTilePath);
-    }
-
     /// <summary>Position d'une combinaison dans la palette (un bloc 3x3, une colonne, une ligne, un bloc isole).</summary>
     static Vector2Int PalettePos(int m) => m switch
     {
@@ -593,8 +740,8 @@ public static class PieParPieArt
         T | B | L => new(0, -2), T | B => new(1, -2), T | B | R => new(2, -2), _ => new(4, -2),
     };
 
-    /// <summary>Cree la Tile Palette : le Rule Tile en haut a gauche, puis toutes les tuiles rangees par variante.</summary>
-    static void CreatePalette(Dictionary<int, Tile[]> tiles, RuleTile rule)
+    /// <summary>Cree la Tile Palette : toutes les tuiles rangees par variante (un groupe par variante, cote a cote).</summary>
+    static void CreatePalette(Dictionary<int, Tile[]> tiles)
     {
         string path = $"{PaletteDir}/PieParPie_Ground.prefab";
 
@@ -614,8 +761,6 @@ public static class PieParPieArt
 
             if (map == null)
             { Debug.LogError("[PieParPieArt] Palette sans Tilemap."); return; }
-
-            map.SetTile(new Vector3Int(0, 4, 0), rule);
 
             for (int v = 0; v < Variants; v++)
                 for (int m = 0; m < 16; m++)
@@ -651,8 +796,120 @@ public static class PieParPieArt
         { Object.DestroyImmediate(go); }
     }
 
-    /// <summary>Construit la scene Art_Preview : decor en Rule Tile, joueur avec echarpe, pieces, bandes de piques, portail.</summary>
-    static void BuildPreviewScene(RuleTile rule, Sprites s, GameObject spikePrefab)
+    /// <summary>Met a jour le prefab Finish : arche vide en enfant, portail en enfant (affiche seulement une fois les pieces recoltees),
+    /// pivot aux pieds, zone de contact a l'interieur de l'arche. Les composants existants sont gardes (references des scenes conservees).</summary>
+    static void UpdateFinishPrefab(Sprite arch, Sprite portal)
+    {
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(FinishPrefabPath) == null)
+        { Debug.LogWarning($"[PieParPieArt] {FinishPrefabPath} absent : lancer PieParPie > Setup puis regenerer."); return; }
+
+        GameObject root = PrefabUtility.LoadPrefabContents(FinishPrefabPath);
+
+        try
+        {
+            if (!root.TryGetComponent(out Finish finish))
+            { Debug.LogError("[PieParPieArt] Le prefab Finish n'a pas de composant Finish."); return; }
+
+            if (root.TryGetComponent(out SpriteRenderer old)) Object.DestroyImmediate(old);
+
+            root.transform.localScale = Vector3.one;
+            if (!root.TryGetComponent(out BoxCollider2D box)) box = root.AddComponent<BoxCollider2D>();
+            box.isTrigger = true; box.size = new Vector2(0.75f, 3.5f); box.offset = new Vector2(0f, 1.85f);
+
+            Child(root.transform, "Arch", arch, 1);
+            GameObject p = Child(root.transform, "Portal", portal, 0);
+
+            var so = new SerializedObject(finish);
+            so.FindProperty("portal").objectReferenceValue = p;
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            PrefabUtility.SaveAsPrefabAsset(root, FinishPrefabPath);
+        }
+        finally
+        { PrefabUtility.UnloadPrefabContents(root); }
+    }
+
+    /// <summary>Trouve ou cree un enfant avec un SpriteRenderer.</summary>
+    static GameObject Child(Transform parent, string name, Sprite sprite, int order)
+    {
+        Transform t = parent.Find(name);
+        SpriteRenderer r = t == null ? MakeSprite(parent, name, sprite, order, Vector3.zero)
+            : t.TryGetComponent(out SpriteRenderer found) ? found : t.gameObject.AddComponent<SpriteRenderer>();
+
+        r.sprite = sprite; r.sortingOrder = order; r.transform.localPosition = Vector3.zero;
+
+        return r.gameObject;
+    }
+
+    /// <summary>Assigne au prefab GameManager les images d'animation du joueur et, s'ils manquent, les renderers du corps et de l'echarpe.</summary>
+    static void ApplyPoses(Dictionary<string, (Sprite[] body, Sprite[] scarf)> poses)
+    {
+        if (AssetDatabase.LoadAssetAtPath<GameObject>(GameManagerPrefabPath) == null)
+        { Debug.LogWarning($"[PieParPieArt] {GameManagerPrefabPath} absent : images d'animation non assignees."); return; }
+
+        GameObject root = PrefabUtility.LoadPrefabContents(GameManagerPrefabPath);
+
+        try
+        {
+            if (!root.TryGetComponent(out GameManager gm))
+            { Debug.LogError("[PieParPieArt] Le prefab GameManager n'a pas de composant GameManager."); return; }
+
+            var so = new SerializedObject(gm);
+            const string anim = "<Player>k__BackingField.<Animator>k__BackingField.";
+            SetClip(so, anim + "jumpInPlace", poses["Jump"]); SetClip(so, anim + "impale", poses["Impale"]);
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            LinkRenderers(root.GetComponentInChildren<SceneLinker>(true));
+
+            PrefabUtility.SaveAsPrefabAsset(root, GameManagerPrefabPath);
+        }
+        finally
+        { PrefabUtility.UnloadPrefabContents(root); }
+    }
+
+    /// <summary>Remplit les tableaux d'images d'un SpriteClip serialise.</summary>
+    static void SetClip(SerializedObject so, string path, (Sprite[] body, Sprite[] scarf) clip)
+    {
+        foreach ((string field, Sprite[] sprites) in new[] { ("Body", clip.body), ("Scarf", clip.scarf) })
+        {
+            SerializedProperty a = so.FindProperty($"{path}.{field}");
+
+            if (a == null)
+            { Debug.LogError($"[PieParPieArt] Champ introuvable : {path}.{field}"); continue; }
+
+            a.arraySize = sprites.Length;
+
+            for (int i = 0; i < sprites.Length; i++) a.GetArrayElementAtIndex(i).objectReferenceValue = sprites[i];
+        }
+    }
+
+    /// <summary>Assigne au SceneLinker les renderers Body et Scarf du visuel du joueur s'ils ne le sont pas encore.</summary>
+    static void LinkRenderers(SceneLinker link)
+    {
+        if (link == null || link.PlayerVisual == null)
+        { Debug.LogWarning("[PieParPieArt] SceneLinker ou PlayerVisual introuvable dans le prefab GameManager."); return; }
+
+        var so = new SerializedObject(link);
+
+        foreach ((string field, string child) in new[] { ("PlayerSprite", "Body"), ("ScarfSprite", "Scarf") })
+        {
+            SerializedProperty p = so.FindProperty($"<{field}>k__BackingField");
+
+            if (p == null || p.objectReferenceValue != null) continue;
+
+            SpriteRenderer r = null;
+
+            foreach (SpriteRenderer s in link.PlayerVisual.GetComponentsInChildren<SpriteRenderer>(true)) if (s.name == child) { r = s; break; }
+
+            if (r == null) Debug.LogWarning($"[PieParPieArt] Renderer '{child}' introuvable sous le visuel du joueur.");
+            else p.objectReferenceValue = r;
+        }
+
+        so.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    /// <summary>Construit la scene Art_Preview : decor en tuiles manuelles, joueur avec echarpe, pieces, bandes de piques, portail.</summary>
+    static void BuildPreviewScene(Dictionary<int, Tile[]> tiles, Sprites s, GameObject spikePrefab)
     {
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         var cam = new GameObject("Main Camera", typeof(Camera)).GetComponent<Camera>();
@@ -663,14 +920,16 @@ public static class PieParPieArt
         var grid = new GameObject("Grid", typeof(Grid));
         var mapGo = new GameObject("Ground", typeof(Tilemap), typeof(TilemapRenderer), typeof(TilemapCollider2D));
         mapGo.transform.SetParent(grid.transform, false);
-        Tilemap map = mapGo.GetComponent<Tilemap>();
-        void Fill(int xa, int ya, int xb, int yb) { for (int y = ya; y <= yb; y++) for (int x = xa; x <= xb; x++) map.SetTile(new Vector3Int(x, y, 0), rule); }
+        var cells = new HashSet<Vector2Int>();
+        void Fill(int xa, int ya, int xb, int yb) { for (int y = ya; y <= yb; y++) for (int x = xa; x <= xb; x++) cells.Add(new(x, y)); }
 
         Fill(-12, -4, 12, -2);   // sol principal (surface en y = -1)
         Fill(-9, 1, -5, 1);      // plateforme flottante d'un bloc d'epaisseur
         Fill(3, -1, 3, 2);       // pilier d'un bloc de large
         Fill(7, -1, 9, 1);       // massif 3 x 3
         Fill(-1, 3, -1, 3);      // bloc isole
+
+        PaintCells(mapGo.GetComponent<Tilemap>(), cells, tiles);
 
         var player = new GameObject("Player_Preview");
         player.transform.position = new Vector3(-11f, -1f);
@@ -685,10 +944,29 @@ public static class PieParPieArt
         Strip(spikePrefab, "Spikes_Edge_PartlyUnsupported", new Vector3(-5f, 2f), 0f, 4);
         Strip(spikePrefab, "Spikes_Ceiling", new Vector3(-5f, 1f), 180f, 8);
         Strip(spikePrefab, "Spikes_Wall", new Vector3(3f, -1f), 90f, 6);
+        Strip(spikePrefab, "Spikes_Corner_Floor", new Vector3(1f, -1f), 0f, 4);
+        Strip(spikePrefab, "Spikes_Duplicate_Overlap", new Vector3(-1f, -1f), 0f, 3);
 
-        MakeSprite(null, "Portal", s.Portal, 1, new Vector3(11.5f, -1f));
+        MakeSprite(MakeSprite(null, "Arch", s.Arch, 1, new Vector3(11.5f, -1f)).transform, "Portal", s.Portal, 0, Vector3.zero);
 
         EditorSceneManager.SaveScene(scene, PreviewScenePath);
+    }
+
+    /// <summary>Peint chaque case avec la tuile manuelle de ses cotes exposes (case voisine vide) et une variante tiree au hasard.</summary>
+    static void PaintCells(Tilemap map, HashSet<Vector2Int> cells, Dictionary<int, Tile[]> tiles)
+    {
+        var sides = new[] { (Vector2Int.up, T), (Vector2Int.down, B), (Vector2Int.left, L), (Vector2Int.right, R) };
+
+        foreach (Vector2Int c in cells)
+        {
+            int m = 0;
+
+            foreach ((Vector2Int d, int bit) in sides)
+            { if (!cells.Contains(c + d)) m |= bit; }
+
+            int v = Mathf.Min(Variants - 1, (int)(Rand(c.x, c.y, 7) * Variants));
+            map.SetTile(new Vector3Int(c.x, c.y, 0), tiles[m][v]);
+        }
     }
 
     /// <summary>Cree un objet avec un SpriteRenderer.</summary>

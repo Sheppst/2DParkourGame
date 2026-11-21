@@ -14,6 +14,8 @@ public class PlayerManager
     [field: SerializeField] public PlayerMechanism Mechanism { get; private set; }
     /// <summary>Racine 2 : point d'entree unique de la mort.</summary>
     [field: SerializeField] public PlayerDeath Death { get; private set; }
+    /// <summary>Racine 2 : couleur de l'echarpe selon les attributs.</summary>
+    [field: SerializeField] public PlayerScarf Scarf { get; private set; }
 
     /// <summary>Transform racine du joueur.</summary>
     public Transform Root { get; private set; }
@@ -33,9 +35,9 @@ public class PlayerManager
     /// <summary>Instancie et initialise les racines 2.</summary>
     internal void Awake()
     {
-        Controller ??= new(); Animator ??= new(); Mechanism ??= new(); Death ??= new();
+        Controller ??= new(); Animator ??= new(); Mechanism ??= new(); Death ??= new(); Scarf ??= new();
 
-        Controller.Awake(); Animator.Awake(); Mechanism.Awake(); Death.Awake();
+        Controller.Awake(); Animator.Awake(); Mechanism.Awake(); Death.Awake(); Scarf.Awake();
     }
 
     /// <summary>Recupere les objets du joueur depuis le SceneLinker et lie les racines 2.</summary>
@@ -44,7 +46,7 @@ public class PlayerManager
         SceneLinker l = GM.Linker;
         Root = l.PlayerRoot; Body = l.PlayerBody; Collider = l.PlayerCollider; Visual = l.PlayerVisual;
 
-        Controller.Bind(l.PlayerGravity); Animator.Bind(); Mechanism.Bind(); Death.Bind();
+        Controller.Bind(l.PlayerGravity); Animator.Bind(); Mechanism.Bind(); Death.Bind(); Scarf.Bind();
     }
 
     /// <summary>Physique : deplacement puis detection de l'environnement.</summary>
@@ -60,7 +62,7 @@ public class PlayerManager
     {
         if (!IsBound) return;
 
-        Controller.Tick(); Mechanism.Tick(); Death.Tick(); Animator.Tick();
+        Controller.Tick(); Mechanism.Tick(); Death.Tick(); Animator.Tick(); Scarf.Tick();
 
         Controller.ClearEvents(); Mechanism.ClearEvents(); Death.ClearEvents();
     }

@@ -14,6 +14,8 @@ public class EntityManager
 
     /// <summary>Nombre de pieces obtenues (sauvegardees + ramassees depuis la derniere sauvegarde).</summary>
     public int Coins { get; private set; }
+    /// <summary>Nombre total de pieces du niveau.</summary>
+    public int TotalCoins { get; private set; }
     /// <summary>Toutes les entites de la scene.</summary>
     public IReadOnlyList<Entity> All => entities;
     /// <summary>Identifiants des pieces validees par la derniere sauvegarde.</summary>
@@ -27,6 +29,8 @@ public class EntityManager
     readonly HashSet<string> savedCoins = new();
     /// <summary>Pieces ramassees depuis la derniere sauvegarde.</summary>
     readonly List<Entity> pendingCoins = new();
+    /// <summary>Points d'arrivee du niveau (portails ouverts seulement quand toutes les pieces sont recoltees).</summary>
+    readonly List<Finish> finishes = new();
     /// <summary>Temps restant avant la prochaine verification de distance.</summary>
     float timer;
 
@@ -45,7 +49,12 @@ public class EntityManager
             if (!byId.TryAdd(e.Id, e)) Debug.LogWarning($"[EntityManager] Deux entites au meme endroit ({e.Id}) : '{e.name}' ignoree par la sauvegarde.", e);
 
             entities.Add(e);
+
+            if (e is Coin) TotalCoins++;
+            else if (e is Finish f) finishes.Add(f);
         }
+
+        RefreshFinishes();
     }
 
     /// <summary>Frame : active/desactive les entites selon leur distance au joueur.</summary>
@@ -71,7 +80,15 @@ public class EntityManager
     internal void Unbind() => Clear();
 
     /// <summary>Remet l'etat a zero.</summary>
-    void Clear() { entities.Clear(); byId.Clear(); savedCoins.Clear(); pendingCoins.Clear(); Coins = 0; timer = 0f; }
+    void Clear() { entities.Clear(); byId.Clear(); savedCoins.Clear(); pendingCoins.Clear(); finishes.Clear(); Coins = TotalCoins = 0; timer = 0f; }
+
+    /// <summary>Ouvre les portails si toutes les pieces sont recoltees, les ferme sinon (appele a chaque changement du compteur).</summary>
+    void RefreshFinishes()
+    {
+        bool open = Coins >= TotalCoins;
+
+        foreach (Finish f in finishes) if (f != null) f.SetOpen(open);
+    }
 
     /// <summary>Ramasse une piece : desactivee (pas detruite), compteur incremente, en attente de sauvegarde.</summary>
     public void Collect(Coin coin)
@@ -79,6 +96,8 @@ public class EntityManager
         if (coin == null || coin.Consumed) return;
 
         coin.SetConsumed(true); pendingCoins.Add(coin); Coins++;
+
+        RefreshFinishes();
     }
 
     /// <summary>Valide les pieces ramassees (appele lors d'une sauvegarde).</summary>
@@ -90,6 +109,8 @@ public class EntityManager
         foreach (Entity c in pendingCoins) if (c != null) c.SetConsumed(false);
 
         pendingCoins.Clear(); Coins = savedCoins.Count;
+
+        RefreshFinishes();
     }
 
     /// <summary>Applique les pieces d'une sauvegarde chargee.</summary>
@@ -101,6 +122,8 @@ public class EntityManager
         { savedCoins.Add(id); e.SetConsumed(true); }
 
         Coins = savedCoins.Count; timer = 0f;
+
+        RefreshFinishes();
     }
 
     /// <summary>Active/desactive la fonction d'une entite sur demande.</summary>

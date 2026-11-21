@@ -10,6 +10,10 @@ public class SceneLinker : MonoBehaviour
     [field: SerializeField] public Transform PlayerRoot { get; private set; }
     /// <summary>Pivot visuel du joueur, place a ses pieds, anime en scale/rotation.</summary>
     [field: SerializeField] public Transform PlayerVisual { get; private set; }
+    /// <summary>Sprite du corps du joueur, change image par image par les animations (optionnel).</summary>
+    [field: SerializeField] public SpriteRenderer PlayerSprite { get; private set; }
+    /// <summary>Sprite de l'echarpe, teinte selon les attributs et change avec les images du corps (optionnel).</summary>
+    [field: SerializeField] public SpriteRenderer ScarfSprite { get; private set; }
     /// <summary>Camera de la scene de jeu.</summary>
     [field: SerializeField] public Camera MainCamera { get; private set; }
     /// <summary>Image plein ecran utilisee pour l'effet de flash (optionnelle).</summary>

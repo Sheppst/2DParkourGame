@@ -22,6 +22,12 @@ public static class PieParPieSetup
     const string ArtDir = "Assets/Art/Placeholders";
     /// <summary>Dossier des prefabs.</summary>
     const string PrefabDir = "Assets/Prefabs";
+    /// <summary>Prefab du GameManager avec les objets communs a chaque niveau (joueur, camera, UI, EventSystem, SceneLinker).</summary>
+    const string GameManagerPrefab = PrefabDir + "/GameManager.prefab";
+    /// <summary>Dossier des sprites generes par PieParPie > Generate Art (utilises s'ils existent).</summary>
+    const string ArtSpriteDir = "Assets/Art/Generated/Sprites";
+    /// <summary>Couleur de l'echarpe tant qu'aucun attribut n'est choisi : magenta de texture manquante, pour l'aspect vide.</summary>
+    static readonly Color ScarfEmpty = new(1f, 0f, 1f);
     /// <summary>Paquet des ressources essentielles de TextMeshPro.</summary>
     const string TmpPackage = "Packages/com.unity.ugui/Package Resources/TMP Essential Resources.unitypackage";
     /// <summary>Asset d'actions contenant la map UI.</summary>
@@ -137,8 +143,12 @@ public static class PieParPieSetup
         return m;
     }
 
-    /// <summary>Cree ou charge le prefab placeholder d'une entite (sprite colore + collider trigger).</summary>
-    static GameObject EntityPrefab<T>(string name, Color color, Vector2 size) where T : Entity
+    /// <summary>Sprite genere par PieParPie > Generate Art, ou null s'il n'existe pas encore.</summary>
+    static Sprite Art(string name) => AssetDatabase.LoadAssetAtPath<Sprite>($"{ArtSpriteDir}/{name}.png");
+
+    /// <summary>Cree ou charge le prefab d'une entite (collider trigger de taille size) : sprite genere s'il est fourni,
+    /// sinon carre blanc colore.</summary>
+    static GameObject EntityPrefab<T>(string name, Color color, Vector2 size, Sprite art = null) where T : Entity
     {
         string path = $"{PrefabDir}/{name}.prefab";
         var p = AssetDatabase.LoadAssetAtPath<GameObject>(path);
@@ -146,9 +156,14 @@ public static class PieParPieSetup
         if (p != null) return p;
 
         var go = new GameObject(name);
-        go.transform.localScale = new Vector3(size.x, size.y, 1f);
-        var sr = go.AddComponent<SpriteRenderer>(); sr.sprite = white; sr.color = color;
-        go.AddComponent<BoxCollider2D>().isTrigger = true;
+        var sr = go.AddComponent<SpriteRenderer>();
+        var box = go.AddComponent<BoxCollider2D>(); box.isTrigger = true;
+
+        if (art != null)
+        { sr.sprite = art; box.size = size; }
+        else
+        { sr.sprite = white; sr.color = color; box.size = Vector2.one; go.transform.localScale = new Vector3(size.x, size.y, 1f); }
+
         go.AddComponent<T>();
 
         p = PrefabUtility.SaveAsPrefabAsset(go, path);
@@ -159,7 +174,7 @@ public static class PieParPieSetup
 
     // ---------- Scene de jeu ----------
 
-    /// <summary>Cree la scene Game : GameManager, lumiere 2D, sol, joueur, entites, zone bloquante, UI et SceneLinker.</summary>
+    /// <summary>Cree la scene Game : prefab GameManager (joueur, camera, UI, EventSystem, SceneLinker), lumiere 2D, sol, entites et zone bloquante.</summary>
     static bool CreateGameScene()
     {
         Scene s = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single); // avant les assets : changer de scene decharge les assets non references
@@ -168,11 +183,14 @@ public static class PieParPieSetup
         Tile ground = GroundTile();
         PhysicsMaterial2D slip = Slippery();
         GameObject trap = EntityPrefab<Trap>("Trap", new Color(0.9f, 0.2f, 0.2f), new Vector2(1f, 0.5f));
-        GameObject coin = EntityPrefab<Coin>("Coin", new Color(1f, 0.85f, 0.1f), new Vector2(0.4f, 0.4f));
+        GameObject coin = EntityPrefab<Coin>("Coin", new Color(1f, 0.85f, 0.1f), new Vector2(0.4f, 0.4f), Art("Coin"));
         GameObject finish = EntityPrefab<Finish>("Finish", new Color(0.2f, 0.9f, 0.3f), new Vector2(0.5f, 2f));
 
-        EnsureGameManager();
-        Camera cam = MainCamera();
+        GameObject gmPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(GameManagerPrefab);
+
+        if (gmPrefab != null) PrefabUtility.InstantiatePrefab(gmPrefab);
+        else if (!BuildGameManager(slip)) return false;
+
         new GameObject("Global Light 2D").AddComponent<UnityEngine.Rendering.Universal.Light2D>().lightType = UnityEngine.Rendering.Universal.Light2D.LightType.Global;
 
         // Sol en tile painting
@@ -196,6 +214,25 @@ public static class PieParPieSetup
         tmGo.GetComponent<TilemapCollider2D>().ProcessTilemapChanges();
         tmGo.GetComponent<CompositeCollider2D>().GenerateGeometry(); // sinon le composite est sauve vide (le joueur traverse le sol)
 
+        // Entites et zone bloquante
+        var entities = new GameObject("Entities").transform;
+        Place(coin, entities, 3f, 0.5f); Place(coin, entities, 6.5f, 2.5f); Place(coin, entities, 19.5f, 2.5f); Place(coin, entities, 24f, 0.5f);
+        Place(trap, entities, 12.5f, 0.25f); Place(trap, entities, 25.5f, 0.25f);
+        Place(finish, entities, 35f, 1f);
+        var zone = new GameObject("BlockZone").AddComponent<BlockZone>();
+        zone.transform.position = new Vector3(16f, 1f);
+        Set(zone, "size", new Vector2(3f, 2f));
+
+        return EditorSceneManager.SaveScene(s, GameScene);
+    }
+
+    /// <summary>Cree le GameManager et ses enfants communs a chaque niveau (camera, joueur, UI, EventSystem, SceneLinker),
+    /// puis l'enregistre en prefab. Les enfants sont relaches dans la scene au lancement (GameManager.ReleaseChildren).</summary>
+    static bool BuildGameManager(PhysicsMaterial2D slip)
+    {
+        var gm = new GameObject("GameManager").AddComponent<GameManager>();
+        Camera cam = MainCamera();
+
         // Joueur : racine aux pieds, pivot visuel aux pieds, sprite au-dessus
         var player = new GameObject("Player");
         player.transform.position = Vector3.zero;
@@ -206,17 +243,24 @@ public static class PieParPieSetup
 
         var visual = new GameObject("Visual").transform; visual.SetParent(player.transform, false);
         var body = new GameObject("Body"); body.transform.SetParent(visual, false);
-        body.transform.localPosition = new Vector3(0f, PH * 0.5f); body.transform.localScale = new Vector3(PW, PH, 1f);
-        var sr = body.AddComponent<SpriteRenderer>(); sr.sprite = white; sr.color = new Color(0.3f, 0.6f, 1f); sr.sortingOrder = 10;
+        var sr = body.AddComponent<SpriteRenderer>(); sr.sortingOrder = 10;
+        Sprite look = Art("Player"), scarf = Art("Scarf");
 
-        // Entites et zone bloquante
-        var entities = new GameObject("Entities").transform;
-        Place(coin, entities, 3f, 0.5f); Place(coin, entities, 6.5f, 2.5f); Place(coin, entities, 19.5f, 2.5f); Place(coin, entities, 24f, 0.5f);
-        Place(trap, entities, 12.5f, 0.25f); Place(trap, entities, 25.5f, 0.25f);
-        Place(finish, entities, 35f, 1f);
-        var zone = new GameObject("BlockZone").AddComponent<BlockZone>();
-        zone.transform.position = new Vector3(16f, 1f);
-        Set(zone, "size", new Vector2(3f, 2f));
+        if (look != null) sr.sprite = look;
+        else
+        {
+            sr.sprite = white; sr.color = new Color(0.3f, 0.6f, 1f);
+            body.transform.localPosition = new Vector3(0f, PH * 0.5f); body.transform.localScale = new Vector3(PW, PH, 1f);
+        }
+
+        SpriteRenderer ss = null;
+
+        if (scarf != null)
+        {
+            var anchor = new GameObject("ScarfAnchor").transform; anchor.SetParent(visual, false);
+            ss = new GameObject("Scarf").AddComponent<SpriteRenderer>(); ss.transform.SetParent(anchor, false);
+            ss.sprite = scarf; ss.color = ScarfEmpty; ss.sortingOrder = 11;
+        }
 
         // UI : flash, message de fin, pause, parametres
         RectTransform canvas = Canvas("Canvas");
@@ -233,8 +277,16 @@ public static class PieParPieSetup
         var link = new GameObject("SceneLinker").AddComponent<SceneLinker>();
         SetAuto(link, "PlayerRoot", player.transform); SetAuto(link, "PlayerVisual", visual); SetAuto(link, "MainCamera", cam);
         SetAuto(link, "FlashImage", flashImg); SetAuto(link, "Pause", pause); SetAuto(link, "Settings", settings); SetAuto(link, "FinishText", finishText);
+        SetAuto(link, "PlayerSprite", sr); SetAuto(link, "ScarfSprite", ss);
 
-        return EditorSceneManager.SaveScene(s, GameScene);
+        foreach (Component c in new Component[] { cam, player.transform, link, canvas, Object.FindAnyObjectByType<EventSystem>() })
+        { if (c != null) c.transform.SetParent(gm.transform, true); }
+
+        if (PrefabUtility.SaveAsPrefabAssetAndConnect(gm.gameObject, GameManagerPrefab, InteractionMode.AutomatedAction) != null) return true;
+
+        Debug.LogError("[PieParPieSetup] Enregistrement du prefab GameManager impossible.");
+
+        return false;
     }
 
     /// <summary>Instancie un prefab a une position.</summary>
@@ -244,8 +296,18 @@ public static class PieParPieSetup
         go.transform.position = new Vector3(x, y);
     }
 
-    /// <summary>Cree un GameManager s'il n'y en a pas.</summary>
-    static void EnsureGameManager() { if (Object.FindAnyObjectByType<GameManager>() == null) new GameObject("GameManager").AddComponent<GameManager>(); }
+    /// <summary>GameManager du menu : le prefab avec tous ses enfants desactives (detruits au lancement), sinon un GameManager seul.</summary>
+    static void MenuGameManager()
+    {
+        var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(GameManagerPrefab);
+
+        if (prefab == null)
+        { new GameObject("GameManager").AddComponent<GameManager>(); return; }
+
+        var gm = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
+
+        foreach (Transform c in gm.transform) c.gameObject.SetActive(false);
+    }
 
     /// <summary>Recupere ou cree la camera orthographique.</summary>
     static Camera MainCamera()
@@ -275,7 +337,7 @@ public static class PieParPieSetup
         Camera c = new GameObject("Main Camera").AddComponent<Camera>();
         c.tag = "MainCamera"; c.orthographic = true; c.transform.position = new Vector3(0f, 0f, -10f);
         c.clearFlags = CameraClearFlags.SolidColor; c.backgroundColor = new Color(0.1f, 0.1f, 0.15f);
-        EnsureGameManager();
+        MenuGameManager();
 
         RectTransform canvas = Canvas("Canvas");
         EnsureEventSystem();
